@@ -1,0 +1,4 @@
+github.com/GianlucaP106/gotmux v0.5.0 h1:kpZsrBPtJFjAvVRfeLwm8cE+7yr4NiMPEaYsTKYGwP8=
+github.com/GianlucaP106/gotmux v0.5.0/go.mod h1:qOsZ+exnCbgv3KJ84VaBo4Q7mXs/W23CW4fyoXAgKe4=
+github.com/alecthomas/kong v1.13.0 h1:5e/7XC3ugvhP1DQBmTS+WuHtCbcv44hsohMgcvVxSrA=
+github.com/alecthomas/kong v1.13.0/go.mod h1:wrlbXem1CWqUV5Vbmss5ISYhsVPkBb1Yo7YKJghju2I=

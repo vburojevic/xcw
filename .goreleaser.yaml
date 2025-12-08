@@ -1,0 +1,65 @@
+version: 2
+
+project_name: xcw
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: xcw
+    main: ./cmd/xcw
+    binary: xcw
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/vedranburojevic/xcw/internal/cli.Version={{.Version}}
+      - -X github.com/vedranburojevic/xcw/internal/cli.Commit={{.Commit}}
+
+archives:
+  - id: xcw
+    builds:
+      - xcw
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - Merge pull request
+      - Merge branch
+
+brews:
+  - name: xcw
+    repository:
+      owner: vedranburojevic
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    folder: Formula
+    homepage: "https://github.com/vedranburojevic/xcw"
+    description: "Tail iOS Simulator logs for AI agents"
+    license: "MIT"
+    install: |
+      bin.install "xcw"
+    test: |
+      system "#{bin}/xcw", "version"
+
+release:
+  github:
+    owner: vedranburojevic
+    name: xcw
+  draft: false
+  prerelease: auto
