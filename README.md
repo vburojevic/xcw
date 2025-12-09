@@ -55,6 +55,19 @@ xcw list --booted-only
 xcw list -f ndjson
 ```
 
+### List Apps
+
+```bash
+# List installed apps on booted simulator
+xcw apps
+
+# List apps on specific simulator
+xcw apps -s "iPhone 17 Pro"
+
+# Output as NDJSON
+xcw apps -f ndjson
+```
+
 ### Tail Logs (Real-time)
 
 ```bash
