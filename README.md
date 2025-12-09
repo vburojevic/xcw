@@ -608,38 +608,51 @@ All errors are output as NDJSON with `type: "error"`, a machine-readable `code`,
 
 ### Example AI Workflow
 
+**Basic streaming (Codex, script-based agents):**
 ```bash
-# 1. Verify setup
-xcw doctor
-
-# 2. Start log monitoring with file output
-xcw tail -s "iPhone 17 Pro" -a com.example.myapp --output test-run.ndjson
-
-# 3. Run tests (logs stream to file)
-xcodebuild test ...
-
-# 4. Analyze the recorded logs
-xcw analyze test-run.ndjson --persist-patterns
-
-# 5. Query for new errors (patterns seen before are marked as known)
-xcw query -a com.example.myapp --since 5m -l error --analyze --persist-patterns
+# Stream logs directly to stdout - agent processes NDJSON line by line
+xcw tail -s "iPhone 17 Pro" -a com.example.myapp
 ```
 
-### Tmux Workflow
+Codex and similar agents read stdout in real-time, parsing each NDJSON line as it arrives. The agent can react immediately to errors without waiting for the stream to end.
 
+**With file output (for later analysis):**
 ```bash
-# 1. Start log monitoring in tmux
+# Stream to file for post-run analysis
+xcw tail -s "iPhone 17 Pro" -a com.example.myapp --output session.ndjson
+```
+
+Use `--output` when you need to:
+- Replay logs later with `xcw replay session.ndjson`
+- Share logs across multiple analysis passes
+- Keep a persistent record of a debugging session
+
+**With tmux (persistent background monitoring):**
+```bash
+# Start in tmux session - outputs session name for later use
 xcw tail -s "iPhone 17 Pro" -a com.example.myapp --tmux
-
-# 2. Run tests (logs stream to tmux)
-xcodebuild test ...
-
-# 3. Query for errors after tests
-xcw query -s "iPhone 17 Pro" -a com.example.myapp --since 5m -l error --analyze
-
-# 4. Clear for next test run
-xcw clear --session xcw-iphone-15-pro
+# Output: {"type":"tmux","session":"xcw-iphone-17-pro","attach":"tmux attach -t xcw-iphone-17-pro"}
 ```
+
+Use `--tmux` when you need to:
+- Keep logs streaming while doing other work
+- Persist the log stream across terminal sessions
+- View live logs anytime with `tmux attach -t <session>`
+
+**Claude Code with background agents:**
+
+Claude Code runs `xcw tail --tmux` in a background agent. The tmux session name is returned in NDJSON:
+```bash
+xcw tail -s "iPhone 17 Pro" -a com.example.myapp --tmux
+# Returns: {"type":"tmux","session":"xcw-iphone-17-pro",...}
+```
+
+Then queries logs on-demand while continuing other work:
+```bash
+xcw query -s "iPhone 17 Pro" -a com.example.myapp --since 5m -l error
+```
+
+This pattern lets the agent continue working while logs stream in the background, checking for errors only when relevant.
 
 ## Requirements
 
