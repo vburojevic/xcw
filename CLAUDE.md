@@ -76,3 +76,4 @@ Tests use testify (`assert`, `require`). See `internal/simulator/manager_test.go
 1. **Write/update tests** - Add tests for new functionality in `*_test.go` files alongside the code
 2. **Update README.md** - Document new flags, commands, or behavior changes
 3. **Run tests** - `go test ./...` must pass before committing
+4. **Commit and push often** - After completing any logical unit of work, commit and push to keep the repository up to date

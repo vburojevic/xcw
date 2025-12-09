@@ -64,6 +64,15 @@ func (c *WatchCmd) Run(globals *Globals) error {
 		return c.outputError(globals, "INVALID_COOLDOWN", fmt.Sprintf("invalid cooldown duration: %s", err))
 	}
 
+	// Parse trigger timeout
+	triggerTimeout, err := time.ParseDuration(c.TriggerTimeout)
+	if err != nil {
+		return c.outputError(globals, "INVALID_TRIGGER_TIMEOUT", fmt.Sprintf("invalid trigger timeout: %s", err))
+	}
+
+	// Create semaphore for limiting parallel triggers
+	triggerSem := make(chan struct{}, c.MaxParallelTriggers)
+
 	// Parse pattern triggers
 	var triggers []triggerConfig
 	for _, pt := range c.OnPattern {
@@ -224,7 +233,7 @@ func (c *WatchCmd) Run(globals *Globals) error {
 			// Check error trigger
 			if c.OnError != "" && entry.Level == domain.LogLevelError {
 				if now.Sub(lastErrorTrigger) >= cooldown {
-					c.runTrigger(globals, "error", c.OnError, &entry)
+					c.runTrigger(globals, "error", c.OnError, &entry, triggerTimeout, triggerSem, c.TriggerOutput)
 					lastErrorTrigger = now
 				}
 			}
@@ -232,7 +241,7 @@ func (c *WatchCmd) Run(globals *Globals) error {
 			// Check fault trigger
 			if c.OnFault != "" && entry.Level == domain.LogLevelFault {
 				if now.Sub(lastFaultTrigger) >= cooldown {
-					c.runTrigger(globals, "fault", c.OnFault, &entry)
+					c.runTrigger(globals, "fault", c.OnFault, &entry, triggerTimeout, triggerSem, c.TriggerOutput)
 					lastFaultTrigger = now
 				}
 			}
@@ -241,7 +250,7 @@ func (c *WatchCmd) Run(globals *Globals) error {
 			for i, t := range triggers {
 				if t.pattern.MatchString(entry.Message) {
 					if now.Sub(lastPatternTriggers[i]) >= cooldown {
-						c.runTrigger(globals, "pattern:"+t.pattern.String(), t.command, &entry)
+						c.runTrigger(globals, "pattern:"+t.pattern.String(), t.command, &entry, triggerTimeout, triggerSem, c.TriggerOutput)
 						lastPatternTriggers[i] = now
 					}
 				}
@@ -259,8 +268,22 @@ func (c *WatchCmd) Run(globals *Globals) error {
 	}
 }
 
-// runTrigger executes a trigger command
-func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, entry *domain.LogEntry) {
+// runTrigger executes a trigger command with safety limits
+func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, entry *domain.LogEntry, timeout time.Duration, sem chan struct{}, outputMode string) {
+	// Try to acquire semaphore (non-blocking)
+	select {
+	case sem <- struct{}{}:
+		// Acquired
+	default:
+		// Too many parallel triggers running, skip this one
+		if globals.Format == "ndjson" {
+			output.NewNDJSONWriter(globals.Stdout).WriteWarning(fmt.Sprintf("trigger skipped (max parallel %d reached): %s", cap(sem), command))
+		} else if !globals.Quiet {
+			fmt.Fprintf(globals.Stderr, "[TRIGGER SKIPPED] Max parallel triggers reached: %s\n", command)
+		}
+		return
+	}
+
 	// Output trigger notification
 	if globals.Format == "ndjson" {
 		output.NewNDJSONWriter(globals.Stdout).WriteTrigger(triggerType, command, entry.Message)
@@ -268,24 +291,68 @@ func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, ent
 		fmt.Fprintf(globals.Stderr, "[TRIGGER:%s] Running: %s\n", triggerType, command)
 	}
 
-	// Set environment variables for the command
-	cmd := exec.Command("sh", "-c", command)
-	cmd.Env = append(os.Environ(),
-		"XCW_TRIGGER="+triggerType,
-		"XCW_LEVEL="+string(entry.Level),
-		"XCW_MESSAGE="+entry.Message,
-		"XCW_SUBSYSTEM="+entry.Subsystem,
-		"XCW_PROCESS="+entry.Process,
-		"XCW_TIMESTAMP="+entry.Timestamp.Format(time.RFC3339),
-	)
-
 	// Run command in background (don't block log processing)
 	go func() {
+		defer func() { <-sem }() // Release semaphore when done
+
+		// Create context with timeout
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+
+		// Set environment variables for the command
+		cmd := exec.CommandContext(ctx, "sh", "-c", command)
+		cmd.Env = append(os.Environ(),
+			"XCW_TRIGGER="+triggerType,
+			"XCW_LEVEL="+string(entry.Level),
+			"XCW_MESSAGE="+entry.Message,
+			"XCW_SUBSYSTEM="+entry.Subsystem,
+			"XCW_PROCESS="+entry.Process,
+			"XCW_TIMESTAMP="+entry.Timestamp.Format(time.RFC3339),
+		)
+
+		// Handle output based on mode
+		switch outputMode {
+		case "inherit":
+			cmd.Stdout = globals.Stdout
+			cmd.Stderr = globals.Stderr
+		case "capture":
+			// Capture and log output
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				errMsg := err.Error()
+				if ctx.Err() == context.DeadlineExceeded {
+					errMsg = fmt.Sprintf("timeout after %s", timeout)
+				}
+				if globals.Format == "ndjson" {
+					output.NewNDJSONWriter(globals.Stdout).WriteTriggerError(command, errMsg)
+				} else if !globals.Quiet {
+					fmt.Fprintf(globals.Stderr, "[TRIGGER ERROR] %s: %s\n", command, errMsg)
+				}
+			}
+			if len(out) > 0 && !globals.Quiet {
+				if globals.Format == "ndjson" {
+					output.NewNDJSONWriter(globals.Stdout).WriteInfo(
+						fmt.Sprintf("trigger output: %s", strings.TrimSpace(string(out))),
+						"", "", "", "")
+				} else {
+					fmt.Fprintf(globals.Stderr, "[TRIGGER OUTPUT] %s\n", strings.TrimSpace(string(out)))
+				}
+			}
+			return
+		default: // "discard"
+			cmd.Stdout = nil
+			cmd.Stderr = nil
+		}
+
 		if err := cmd.Run(); err != nil {
+			errMsg := err.Error()
+			if ctx.Err() == context.DeadlineExceeded {
+				errMsg = fmt.Sprintf("timeout after %s", timeout)
+			}
 			if globals.Format == "ndjson" {
-				output.NewNDJSONWriter(globals.Stdout).WriteTriggerError(command, err.Error())
+				output.NewNDJSONWriter(globals.Stdout).WriteTriggerError(command, errMsg)
 			} else if !globals.Quiet {
-				fmt.Fprintf(globals.Stderr, "[TRIGGER ERROR] %s: %s\n", command, err.Error())
+				fmt.Fprintf(globals.Stderr, "[TRIGGER ERROR] %s: %s\n", command, errMsg)
 			}
 		}
 	}()
