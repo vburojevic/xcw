@@ -87,6 +87,16 @@ type TriggerErrorOutput struct {
 	Error         string `json:"error"`
 }
 
+// ReadyOutput signals that log capture is active and ready
+type ReadyOutput struct {
+	Type          string `json:"type"` // Always "ready"
+	SchemaVersion int    `json:"schemaVersion"`
+	Timestamp     string `json:"timestamp"`
+	Simulator     string `json:"simulator"`
+	UDID          string `json:"udid"`
+	App           string `json:"app"`
+}
+
 // Write outputs a single log entry as NDJSON
 func (w *NDJSONWriter) Write(entry *domain.LogEntry) error {
 	out := OutputEntry{
@@ -176,6 +186,18 @@ func (w *NDJSONWriter) WriteTriggerError(command, errMsg string) error {
 		SchemaVersion: SchemaVersion,
 		Command:       command,
 		Error:         errMsg,
+	})
+}
+
+// WriteReady outputs a ready signal indicating log capture is active
+func (w *NDJSONWriter) WriteReady(timestamp, simulator, udid, app string) error {
+	return w.encoder.Encode(&ReadyOutput{
+		Type:          "ready",
+		SchemaVersion: SchemaVersion,
+		Timestamp:     timestamp,
+		Simulator:     simulator,
+		UDID:          udid,
+		App:           app,
 	})
 }
 

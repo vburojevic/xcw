@@ -105,8 +105,9 @@ func buildDocumentation() *HelpOutput {
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --tmux`, Description: "Background with tmux (returns session name)"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --output file.ndjson`, Description: "Stream to file"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp -l error`, Description: "Only error/fault level"},
+					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --wait-for-launch`, Description: "Start capture before app launches (emits ready event)"},
 				},
-				OutputTypes:     []string{"log", "summary", "heartbeat", "tmux", "error"},
+				OutputTypes:     []string{"log", "ready", "summary", "heartbeat", "tmux", "error"},
 				RelatedCommands: []string{"query", "watch", "analyze"},
 			},
 			"query": {
@@ -283,6 +284,18 @@ func buildDocumentation() *HelpOutput {
 					"process":       "com.example.myapp",
 				},
 				When: "Each line of stdout/stderr from xcw launch",
+			},
+			"ready": {
+				Description: "Signals that log capture is active and ready. Use with --wait-for-launch to start capturing before the app launches.",
+				Example: map[string]interface{}{
+					"type":          "ready",
+					"schemaVersion": 1,
+					"timestamp":     "2024-01-15T10:30:45.123Z",
+					"simulator":     "iPhone 17 Pro",
+					"udid":          "ABC123-DEF456-...",
+					"app":           "com.example.myapp",
+				},
+				When: "Immediately after log stream starts when --wait-for-launch is used",
 			},
 			"error": {
 				Description: "Error from xcw (not the app being monitored)",

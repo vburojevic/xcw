@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2024-12-09
+
+### Added
+- `--wait-for-launch` flag for `xcw tail` - Start log capture before app launches
+  - Emits `{"type":"ready"}` event when log capture is active
+  - AI agents can wait for this event, then trigger build/run process
+  - Ensures no startup logs are missed
+- New `ready` output type documenting when log capture is active
+
+### Changed
+- Updated README with "Pre-launch log capture" section
+- Updated help.go with ready output type documentation
+
 ## [0.4.0] - 2024-12-09
 
 ### Added

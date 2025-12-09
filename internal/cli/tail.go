@@ -39,6 +39,7 @@ type TailCmd struct {
 	SessionPrefix    string   `help:"Prefix for session filename (default: app bundle ID)"`
 	Tmux             bool     `help:"Output to tmux session"`
 	Session          string   `help:"Custom tmux session name (default: xcw-<simulator>)"`
+	WaitForLaunch    bool     `help:"Start streaming immediately, emit 'ready' event when capture is active"`
 }
 
 // Run executes the tail command
@@ -254,6 +255,20 @@ func (c *TailCmd) Run(globals *Globals) error {
 	}
 	defer streamer.Stop()
 	globals.Debug("Log stream started successfully")
+
+	// Emit ready event when --wait-for-launch is used (signals log capture is active)
+	if c.WaitForLaunch {
+		if globals.Format == "ndjson" {
+			output.NewNDJSONWriter(globals.Stdout).WriteReady(
+				time.Now().Format(time.RFC3339Nano),
+				device.Name,
+				device.UDID,
+				c.App,
+			)
+		} else {
+			fmt.Fprintf(globals.Stderr, "Ready: log capture active for %s\n", c.App)
+		}
+	}
 
 	// Create output writer based on format
 	var writer interface {

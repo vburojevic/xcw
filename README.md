@@ -121,6 +121,32 @@ xcw tail -a com.example.myapp --tmux
 xcw tail -a com.example.myapp --session-dir ~/.xcw/sessions
 ```
 
+## Pre-launch log capture
+
+To capture logs from the very first moment an app launches (including startup logs), use `--wait-for-launch`:
+
+```sh
+xcw tail -s "iPhone 17 Pro" -a com.example.myapp --wait-for-launch
+```
+
+This emits a `ready` event immediately when log capture is active:
+
+```json
+{"type":"ready","schemaVersion":1,"timestamp":"...","simulator":"iPhone 17 Pro","udid":"...","app":"com.example.myapp"}
+```
+
+**AI agent workflow:** Start `xcw tail --wait-for-launch`, wait for the `ready` event, then trigger your build/run process:
+
+```sh
+# Terminal 1: Start log capture (emits ready event immediately)
+xcw tail -s "iPhone 17 Pro" -a com.example.myapp --wait-for-launch
+
+# Terminal 2: After seeing ready event, build and run
+xcodebuild -scheme MyApp build
+xcrun simctl install booted MyApp.app
+xcrun simctl launch booted com.example.myapp
+```
+
 ## Querying historical logs
 
 `xcw query` reads previously recorded logs (from `--output` files or sessions) and applies filters.  Use relative durations (`--since 5m`, `--since 1h`) and optionally request an analysis summary.
@@ -254,7 +280,7 @@ xcw query -s "iPhone 17 Pro" -a com.example.myapp --since 5m -l error
 
 ## Output format & JSON schema
 
-By default `xcw` writes NDJSON to stdout.  Each event includes a `type` and `schemaVersion` field.  Types include `log`, `console`, `summary`, `analysis`, `heartbeat`, `error`, `info`, `warning`, `tmux`, `trigger`, `app`, `doctor`, `pick` and `session`.  The current schema version is `1`.
+By default `xcw` writes NDJSON to stdout.  Each event includes a `type` and `schemaVersion` field.  Types include `log`, `console`, `ready`, `summary`, `analysis`, `heartbeat`, `error`, `info`, `warning`, `tmux`, `trigger`, `app`, `doctor`, `pick` and `session`.  The current schema version is `1`.
 
 Example log entry:
 
