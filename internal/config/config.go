@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -57,74 +56,106 @@ func Default() *Config {
 }
 
 // Load loads configuration from files and environment
+// Config file search order (highest precedence first):
+// 1. ./.xcw.yaml or ./.xcw.yml
+// 2. ~/.xcw.yaml or ~/.xcw.yml
+// 3. $XDG_CONFIG_HOME/xcw/config.yaml (or ~/.config/xcw/config.yaml)
+// 4. /etc/xcw/config.yaml
 func Load() (*Config, error) {
-	v := viper.New()
-
-	// Set config name and type
-	v.SetConfigName("xcw")
-	v.SetConfigType("yaml")
-
-	// Add config paths (in order of precedence, lowest first)
-	// 1. System-wide config
-	v.AddConfigPath("/etc/xcw/")
-	// 2. User config directory
-	if configDir, err := os.UserConfigDir(); err == nil {
-		v.AddConfigPath(filepath.Join(configDir, "xcw"))
-	}
-	// 3. Home directory (as .xcwrc.yaml or .xcw.yaml)
-	if home, err := os.UserHomeDir(); err == nil {
-		v.AddConfigPath(home)
-		v.SetConfigName(".xcw")
-	}
-	// 4. Current directory
-	v.AddConfigPath(".")
-
-	// Also check for .xcwrc file
-	v.SetConfigName(".xcwrc")
-	v.AddConfigPath(".")
-	if home, err := os.UserHomeDir(); err == nil {
-		v.AddConfigPath(home)
-	}
-
-	// Environment variables
-	v.SetEnvPrefix("XCW")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
-	v.AutomaticEnv()
-
-	// Bind specific environment variables
-	v.BindEnv("format", "XCW_FORMAT")
-	v.BindEnv("level", "XCW_LEVEL")
-	v.BindEnv("quiet", "XCW_QUIET")
-	v.BindEnv("verbose", "XCW_VERBOSE")
-	v.BindEnv("defaults.app", "XCW_APP")
-	v.BindEnv("defaults.simulator", "XCW_SIMULATOR")
-
-	// Set defaults
 	cfg := Default()
-	v.SetDefault("format", cfg.Format)
-	v.SetDefault("level", cfg.Level)
-	v.SetDefault("quiet", cfg.Quiet)
-	v.SetDefault("verbose", cfg.Verbose)
-	v.SetDefault("defaults.simulator", cfg.Defaults.Simulator)
-	v.SetDefault("defaults.buffer_size", cfg.Defaults.BufferSize)
-	v.SetDefault("defaults.since", cfg.Defaults.Since)
-	v.SetDefault("defaults.limit", cfg.Defaults.Limit)
 
-	// Try to read config file (ignore if not found)
-	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			// Config file was found but another error occurred
+	// Try to find and load config file in order of precedence
+	configFile := findConfigFile()
+	if configFile != "" {
+		v := viper.New()
+		v.SetConfigFile(configFile)
+
+		if err := v.ReadInConfig(); err != nil {
 			return nil, err
 		}
-		// Config file not found; use defaults
+
+		if err := v.Unmarshal(cfg); err != nil {
+			return nil, err
+		}
 	}
 
-	// Unmarshal into struct
-	if err := v.Unmarshal(cfg); err != nil {
-		return nil, err
-	}
+	// Override with environment variables
+	applyEnvOverrides(cfg)
 
 	return cfg, nil
+}
+
+// findConfigFile searches for config file in standard locations
+func findConfigFile() string {
+	// Config file names to search for (in order)
+	names := []string{".xcw.yaml", ".xcw.yml", "xcw.yaml", "xcw.yml"}
+
+	// Get home directory
+	home, homeErr := os.UserHomeDir()
+
+	// Get config directory (XDG_CONFIG_HOME or ~/.config)
+	configDir, configDirErr := os.UserConfigDir()
+
+	// Search locations in order of precedence (highest first)
+	var searchPaths []string
+
+	// 1. Current directory
+	cwd, err := os.Getwd()
+	if err == nil {
+		searchPaths = append(searchPaths, cwd)
+	}
+
+	// 2. Home directory
+	if homeErr == nil {
+		searchPaths = append(searchPaths, home)
+	}
+
+	// 3. Config directory (e.g., ~/.config/xcw/)
+	if configDirErr == nil {
+		searchPaths = append(searchPaths, filepath.Join(configDir, "xcw"))
+	}
+
+	// 4. System config
+	searchPaths = append(searchPaths, "/etc/xcw")
+
+	// Search for config file
+	for _, dir := range searchPaths {
+		for _, name := range names {
+			path := filepath.Join(dir, name)
+			if _, err := os.Stat(path); err == nil {
+				return path
+			}
+		}
+		// Also check for config.yaml in subdirs
+		path := filepath.Join(dir, "config.yaml")
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+
+	return ""
+}
+
+// applyEnvOverrides applies environment variable overrides to config
+func applyEnvOverrides(cfg *Config) {
+	if v := os.Getenv("XCW_FORMAT"); v != "" {
+		cfg.Format = v
+	}
+	if v := os.Getenv("XCW_LEVEL"); v != "" {
+		cfg.Level = v
+	}
+	if v := os.Getenv("XCW_QUIET"); v == "true" || v == "1" {
+		cfg.Quiet = true
+	}
+	if v := os.Getenv("XCW_VERBOSE"); v == "true" || v == "1" {
+		cfg.Verbose = true
+	}
+	if v := os.Getenv("XCW_APP"); v != "" {
+		cfg.Defaults.App = v
+	}
+	if v := os.Getenv("XCW_SIMULATOR"); v != "" {
+		cfg.Defaults.Simulator = v
+	}
 }
 
 // LoadFromFile loads configuration from a specific file
@@ -145,27 +176,7 @@ func LoadFromFile(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// ConfigFile returns the path to the config file that was loaded
+// ConfigFile returns the path to the config file that would be loaded
 func ConfigFile() string {
-	v := viper.New()
-
-	v.SetConfigName("xcw")
-	v.SetConfigType("yaml")
-
-	if home, err := os.UserHomeDir(); err == nil {
-		v.AddConfigPath(home)
-	}
-	v.AddConfigPath(".")
-
-	if err := v.ReadInConfig(); err == nil {
-		return v.ConfigFileUsed()
-	}
-
-	// Try .xcwrc
-	v.SetConfigName(".xcwrc")
-	if err := v.ReadInConfig(); err == nil {
-		return v.ConfigFileUsed()
-	}
-
-	return ""
+	return findConfigFile()
 }
