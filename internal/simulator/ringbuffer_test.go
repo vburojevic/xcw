@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vedranburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/domain"
 )
 
 func TestNewRingBuffer(t *testing.T) {

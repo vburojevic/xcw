@@ -5,7 +5,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 BUILD_TIME ?= $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 
-LDFLAGS=-ldflags "-X github.com/vedranburojevic/xcw/internal/cli.Version=$(VERSION) -X github.com/vedranburojevic/xcw/internal/cli.Commit=$(COMMIT)"
+LDFLAGS=-ldflags "-X github.com/vburojevic/xcw/internal/cli.Version=$(VERSION) -X github.com/vburojevic/xcw/internal/cli.Commit=$(COMMIT)"
 
 .PHONY: all build clean test install uninstall release help
 

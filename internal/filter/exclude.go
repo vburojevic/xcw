@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/vedranburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/domain"
 )
 
 // ExcludePatternFilter excludes logs matching a regex pattern

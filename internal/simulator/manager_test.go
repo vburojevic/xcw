@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vedranburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/domain"
 )
 
 func TestMultipleBootedError(t *testing.T) {

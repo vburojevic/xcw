@@ -9,8 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/vedranburojevic/xcw/internal/domain"
-	"github.com/vedranburojevic/xcw/internal/output"
+	"github.com/vburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/output"
 )
 
 // Model represents the TUI state

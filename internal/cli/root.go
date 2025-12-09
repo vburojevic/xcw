@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/vedranburojevic/xcw/internal/config"
+	"github.com/vburojevic/xcw/internal/config"
 )
 
 // CLI is the root command structure for XcodeConsoleWatcher

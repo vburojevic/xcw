@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/vedranburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/domain"
 )
 
 // RawNDJSONEntry matches the native NDJSON structure from `log stream --style ndjson`

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/vedranburojevic/xcw/internal/config"
+	"github.com/vburojevic/xcw/internal/config"
 )
 
 // ConfigCmd shows or manages configuration

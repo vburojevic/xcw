@@ -5,8 +5,8 @@ import (
 	"os"
 
 	"github.com/alecthomas/kong"
-	"github.com/vedranburojevic/xcw/internal/cli"
-	"github.com/vedranburojevic/xcw/internal/config"
+	"github.com/vburojevic/xcw/internal/cli"
+	"github.com/vburojevic/xcw/internal/config"
 )
 
 func main() {

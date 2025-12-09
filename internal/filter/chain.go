@@ -1,7 +1,7 @@
 package filter
 
 import (
-	"github.com/vedranburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/domain"
 )
 
 // Filter determines if a log entry should be included

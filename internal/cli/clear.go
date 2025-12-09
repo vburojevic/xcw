@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/vedranburojevic/xcw/internal/output"
-	"github.com/vedranburojevic/xcw/internal/tmux"
+	"github.com/vburojevic/xcw/internal/output"
+	"github.com/vburojevic/xcw/internal/tmux"
 )
 
 // ClearCmd clears a tmux session's content

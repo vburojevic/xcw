@@ -3,7 +3,7 @@ package filter
 import (
 	"regexp"
 
-	"github.com/vedranburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/domain"
 )
 
 // RegexFilter filters logs by message pattern

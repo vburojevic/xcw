@@ -19,8 +19,8 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/vedranburojevic/xcw/internal/cli.Version={{.Version}}
-      - -X github.com/vedranburojevic/xcw/internal/cli.Commit={{.Commit}}
+      - -X github.com/vburojevic/xcw/internal/cli.Version={{.Version}}
+      - -X github.com/vburojevic/xcw/internal/cli.Commit={{.Commit}}
 
 archives:
   - id: xcw
@@ -45,11 +45,11 @@ changelog:
 brews:
   - name: xcw
     repository:
-      owner: vedranburojevic
+      owner: vburojevic
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     folder: Formula
-    homepage: "https://github.com/vedranburojevic/xcw"
+    homepage: "https://github.com/vburojevic/xcw"
     description: "Tail iOS Simulator logs for AI agents"
     license: "MIT"
     install: |
@@ -59,7 +59,7 @@ brews:
 
 release:
   github:
-    owner: vedranburojevic
+    owner: vburojevic
     name: xcw
   draft: false
   prerelease: auto

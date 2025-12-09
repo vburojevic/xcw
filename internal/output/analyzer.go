@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/samber/lo"
-	"github.com/vedranburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/domain"
 )
 
 // Precompiled regexes for message normalization

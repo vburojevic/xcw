@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/vedranburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/domain"
 )
 
 // NDJSONWriter writes log entries as NDJSON

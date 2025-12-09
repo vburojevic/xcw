@@ -9,9 +9,9 @@ import (
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
-	"github.com/vedranburojevic/xcw/internal/domain"
-	"github.com/vedranburojevic/xcw/internal/output"
-	"github.com/vedranburojevic/xcw/internal/simulator"
+	"github.com/vburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/output"
+	"github.com/vburojevic/xcw/internal/simulator"
 )
 
 // ListCmd lists available simulators

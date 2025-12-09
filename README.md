@@ -18,20 +18,20 @@ A Go CLI for tailing and watching Xcode iOS Simulator console logs, optimized fo
 ### Homebrew (Recommended)
 
 ```bash
-brew tap vedranburojevic/tap
+brew tap vburojevic/tap
 brew install xcw
 ```
 
 ### Go Install
 
 ```bash
-go install github.com/vedranburojevic/xcw/cmd/xcw@latest
+go install github.com/vburojevic/xcw/cmd/xcw@latest
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/vedranburojevic/xcw.git
+git clone https://github.com/vburojevic/xcw.git
 cd xcw
 make install
 ```

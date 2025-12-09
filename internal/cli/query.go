@@ -7,9 +7,9 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/vedranburojevic/xcw/internal/domain"
-	"github.com/vedranburojevic/xcw/internal/output"
-	"github.com/vedranburojevic/xcw/internal/simulator"
+	"github.com/vburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/output"
+	"github.com/vburojevic/xcw/internal/simulator"
 )
 
 // QueryCmd queries historical logs from a simulator

@@ -3,7 +3,7 @@ package filter
 import (
 	"strings"
 
-	"github.com/vedranburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/domain"
 )
 
 // AppFilter filters logs by bundle identifier (subsystem prefix)

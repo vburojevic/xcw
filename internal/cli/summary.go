@@ -7,9 +7,9 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/vedranburojevic/xcw/internal/domain"
-	"github.com/vedranburojevic/xcw/internal/output"
-	"github.com/vedranburojevic/xcw/internal/simulator"
+	"github.com/vburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/output"
+	"github.com/vburojevic/xcw/internal/simulator"
 )
 
 // SummaryCmd outputs a summary of recent logs

@@ -3,7 +3,7 @@ package simulator
 import (
 	"sync"
 
-	"github.com/vedranburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/domain"
 )
 
 // RingBuffer is a thread-safe circular buffer for log entries

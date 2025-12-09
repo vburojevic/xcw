@@ -1,4 +1,4 @@
-module github.com/vedranburojevic/xcw
+module github.com/vburojevic/xcw
 
 go 1.25.5
 

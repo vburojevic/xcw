@@ -9,9 +9,9 @@ import (
 	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/vedranburojevic/xcw/internal/domain"
-	"github.com/vedranburojevic/xcw/internal/simulator"
-	"github.com/vedranburojevic/xcw/internal/tui"
+	"github.com/vburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/simulator"
+	"github.com/vburojevic/xcw/internal/tui"
 )
 
 // UICmd launches an interactive TUI for viewing logs

@@ -35,7 +35,7 @@ linters-settings:
     simplify: true
 
   goimports:
-    local-prefixes: github.com/vedranburojevic/xcw
+    local-prefixes: github.com/vburojevic/xcw
 
   misspell:
     locale: US

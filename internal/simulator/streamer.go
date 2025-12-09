@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vedranburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/domain"
 )
 
 // StreamOptions configures log streaming behavior

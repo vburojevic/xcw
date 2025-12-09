@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vedranburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/domain"
 )
 
 // Manager handles simulator discovery and lifecycle operations

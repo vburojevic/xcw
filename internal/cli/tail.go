@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vedranburojevic/xcw/internal/domain"
-	"github.com/vedranburojevic/xcw/internal/output"
-	"github.com/vedranburojevic/xcw/internal/simulator"
-	"github.com/vedranburojevic/xcw/internal/tmux"
+	"github.com/vburojevic/xcw/internal/domain"
+	"github.com/vburojevic/xcw/internal/output"
+	"github.com/vburojevic/xcw/internal/simulator"
+	"github.com/vburojevic/xcw/internal/tmux"
 )
 
 // TailCmd streams real-time logs from a simulator
