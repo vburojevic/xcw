@@ -76,8 +76,11 @@ xcw tail -a com.example.myapp -p "error|warning"
 # Exclude noisy logs
 xcw tail -a com.example.myapp -x "heartbeat|keepalive"
 
-# With periodic AI summaries every 30 seconds
-xcw tail -a com.example.myapp --summary-interval 30s
+# Basic streaming (recommended for AI agents)
+xcw tail -s "iPhone 17 Pro" -a com.example.myapp
+
+# With tmux for persistent background monitoring
+xcw tail -s "iPhone 17 Pro" -a com.example.myapp --tmux
 
 # With heartbeat messages for connection health
 xcw tail -a com.example.myapp --heartbeat 10s
@@ -612,7 +615,6 @@ LOG_FILE="crashes.ndjson"
 xcw tail --booted \
   --app "$APP_BUNDLE" \
   --level Error \
-  --summary-interval 30s \
   --persist-patterns \
   --pattern-file "$PATTERN_FILE" \
   --output "$LOG_FILE" &
@@ -699,15 +701,13 @@ class Summary:
 
 def stream_logs(
     app: str,
-    level: str = "Error",
-    summary_interval: str = "30s"
+    level: str = "Error"
 ) -> Iterator[dict]:
     """Stream parsed NDJSON entries from xcw tail."""
     cmd = [
         "xcw", "tail", "--booted",
         "-a", app,
         "--level", level,
-        "--summary-interval", summary_interval,
         "-f", "ndjson"
     ]
 
@@ -858,7 +858,7 @@ exit 0
 xcw doctor
 
 # 2. Start log monitoring with file output
-xcw tail -a com.example.myapp --output test-run.ndjson --summary-interval 30s
+xcw tail -s "iPhone 17 Pro" -a com.example.myapp --output test-run.ndjson
 
 # 3. Run tests (logs stream to file)
 xcodebuild test ...
@@ -874,13 +874,13 @@ xcw query -a com.example.myapp --since 5m -l error --analyze --persist-patterns
 
 ```bash
 # 1. Start log monitoring in tmux
-xcw tail -a com.example.myapp --tmux --summary-interval 30s
+xcw tail -s "iPhone 17 Pro" -a com.example.myapp --tmux
 
 # 2. Run tests (logs stream to tmux)
 xcodebuild test ...
 
 # 3. Query for errors after tests
-xcw query -a com.example.myapp --since 5m -l error --analyze
+xcw query -s "iPhone 17 Pro" -a com.example.myapp --since 5m -l error --analyze
 
 # 4. Clear for next test run
 xcw clear --session xcw-iphone-15-pro
