@@ -97,3 +97,28 @@ Tests use testify (`assert`, `require`). See `internal/simulator/manager_test.go
 - Breaking changes
 - Significant improvements
 - Dependency updates that affect functionality
+
+## Releasing
+
+**After completing work and pushing to main, create a new release:**
+
+1. **Update CHANGELOG.md** - Move items from `[Unreleased]` to new version section
+2. **Commit the changelog update**
+3. **Create and push tag:**
+   ```bash
+   git tag v0.X.0
+   git push origin v0.X.0
+   ```
+
+GoReleaser will automatically:
+- Build macOS binaries (Intel + Apple Silicon)
+- Create GitHub release with artifacts
+- Update Homebrew formula in `vburojevic/homebrew-tap`
+
+**Users can install/upgrade via Homebrew:**
+```bash
+brew tap vburojevic/tap
+brew install xcw
+# or upgrade existing
+brew upgrade xcw
+```
