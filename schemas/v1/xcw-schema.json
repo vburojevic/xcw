@@ -1,0 +1,526 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "app": {
+      "description": "Information about an installed app on the simulator",
+      "properties": {
+        "app_type": {
+          "description": "Whether app is user-installed or system",
+          "enum": [
+            "user",
+            "system"
+          ],
+          "type": "string"
+        },
+        "build_number": {
+          "description": "App build number",
+          "type": "string"
+        },
+        "bundle_id": {
+          "description": "App bundle identifier",
+          "type": "string"
+        },
+        "name": {
+          "description": "App display name",
+          "type": "string"
+        },
+        "path": {
+          "description": "Path to app bundle",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "type": {
+          "const": "app",
+          "type": "string"
+        },
+        "version": {
+          "description": "App version string",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "bundle_id",
+        "name",
+        "app_type"
+      ],
+      "title": "Installed App",
+      "type": "object"
+    },
+    "doctor": {
+      "description": "System diagnostic report from xcw doctor",
+      "properties": {
+        "all_passed": {
+          "description": "True if all checks passed without errors",
+          "type": "boolean"
+        },
+        "checks": {
+          "description": "Individual check results",
+          "items": {
+            "properties": {
+              "details": {
+                "description": "Additional details or remediation steps",
+                "type": "string"
+              },
+              "message": {
+                "description": "Result message",
+                "type": "string"
+              },
+              "name": {
+                "description": "Name of the check",
+                "type": "string"
+              },
+              "status": {
+                "description": "Check result status",
+                "enum": [
+                  "ok",
+                  "warning",
+                  "error"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "status"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "error_count": {
+          "description": "Number of checks with error status",
+          "type": "integer"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "timestamp": {
+          "description": "When the check was performed",
+          "format": "date-time",
+          "type": "string"
+        },
+        "type": {
+          "const": "doctor",
+          "type": "string"
+        },
+        "warn_count": {
+          "description": "Number of checks with warning status",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "timestamp",
+        "checks",
+        "all_passed"
+      ],
+      "title": "Doctor Report",
+      "type": "object"
+    },
+    "error": {
+      "description": "Error message from xcw",
+      "properties": {
+        "code": {
+          "description": "Machine-readable error code for programmatic handling",
+          "enum": [
+            "DEVICE_NOT_FOUND",
+            "NO_BOOTED_SIMULATOR",
+            "INVALID_FLAGS",
+            "INVALID_PATTERN",
+            "INVALID_EXCLUDE_PATTERN",
+            "INVALID_DURATION",
+            "INVALID_UNTIL",
+            "INVALID_INTERVAL",
+            "INVALID_HEARTBEAT",
+            "INVALID_ROTATE_SIZE",
+            "INVALID_COOLDOWN",
+            "INVALID_TRIGGER",
+            "INVALID_TRIGGER_PATTERN",
+            "INVALID_TRIGGER_TIMEOUT",
+            "STREAM_FAILED",
+            "QUERY_FAILED",
+            "LIST_FAILED",
+            "LIST_APPS_FAILED",
+            "FILE_NOT_FOUND",
+            "READ_ERROR",
+            "NO_ENTRIES",
+            "DEVICE_NOT_BOOTED",
+            "TMUX_NOT_INSTALLED",
+            "TMUX_ERROR",
+            "SESSION_NOT_FOUND",
+            "CLEAR_FAILED",
+            "NOT_INTERACTIVE",
+            "NO_SIMULATORS",
+            "NO_APPS"
+          ],
+          "type": "string"
+        },
+        "message": {
+          "description": "Human-readable error description",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "type": {
+          "const": "error",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "code",
+        "message"
+      ],
+      "title": "Error",
+      "type": "object"
+    },
+    "heartbeat": {
+      "description": "Keepalive message indicating stream is active",
+      "properties": {
+        "logs_since_last": {
+          "description": "Number of logs since last heartbeat",
+          "type": "integer"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "timestamp": {
+          "description": "ISO8601 timestamp of the heartbeat",
+          "format": "date-time",
+          "type": "string"
+        },
+        "type": {
+          "const": "heartbeat",
+          "type": "string"
+        },
+        "uptime_seconds": {
+          "description": "Seconds since stream started",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "timestamp",
+        "uptime_seconds",
+        "logs_since_last"
+      ],
+      "title": "Heartbeat",
+      "type": "object"
+    },
+    "info": {
+      "description": "Informational message from xcw",
+      "properties": {
+        "device": {
+          "description": "Device name if applicable",
+          "type": "string"
+        },
+        "message": {
+          "description": "Info message content",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "type": {
+          "const": "info",
+          "type": "string"
+        },
+        "udid": {
+          "description": "Device UDID if applicable",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "message"
+      ],
+      "title": "Info Message",
+      "type": "object"
+    },
+    "log": {
+      "description": "A single log entry from the iOS Simulator",
+      "properties": {
+        "category": {
+          "description": "Log category within the subsystem",
+          "type": "string"
+        },
+        "level": {
+          "description": "Log level/severity",
+          "enum": [
+            "Debug",
+            "Info",
+            "Default",
+            "Error",
+            "Fault"
+          ],
+          "type": "string"
+        },
+        "message": {
+          "description": "The log message content",
+          "type": "string"
+        },
+        "pid": {
+          "description": "Process ID",
+          "type": "integer"
+        },
+        "process": {
+          "description": "Name of the process that generated the log",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "subsystem": {
+          "description": "Subsystem identifier (usually bundle ID)",
+          "type": "string"
+        },
+        "timestamp": {
+          "description": "ISO8601 timestamp of the log entry",
+          "format": "date-time",
+          "type": "string"
+        },
+        "type": {
+          "const": "log",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "timestamp",
+        "level",
+        "process",
+        "pid",
+        "message"
+      ],
+      "title": "Log Entry",
+      "type": "object"
+    },
+    "pick": {
+      "description": "Result from interactive simulator or app selection",
+      "properties": {
+        "bundle_id": {
+          "description": "App bundle identifier (when picking app)",
+          "type": "string"
+        },
+        "name": {
+          "description": "Display name of the selected item",
+          "type": "string"
+        },
+        "picked": {
+          "description": "What was picked: simulator or app",
+          "enum": [
+            "simulator",
+            "app"
+          ],
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "type": {
+          "const": "pick",
+          "type": "string"
+        },
+        "udid": {
+          "description": "Simulator UDID (when picking simulator)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "picked",
+        "name"
+      ],
+      "title": "Pick Result",
+      "type": "object"
+    },
+    "summary": {
+      "description": "Periodic summary of log statistics",
+      "properties": {
+        "debugCount": {
+          "description": "Number of debug-level entries",
+          "type": "integer"
+        },
+        "defaultCount": {
+          "description": "Number of default-level entries",
+          "type": "integer"
+        },
+        "errorCount": {
+          "description": "Number of error-level entries",
+          "type": "integer"
+        },
+        "errorRate": {
+          "description": "Errors per minute rate",
+          "type": "number"
+        },
+        "faultCount": {
+          "description": "Number of fault-level entries",
+          "type": "integer"
+        },
+        "hasErrors": {
+          "description": "True if any errors were detected",
+          "type": "boolean"
+        },
+        "hasFaults": {
+          "description": "True if any faults were detected",
+          "type": "boolean"
+        },
+        "infoCount": {
+          "description": "Number of info-level entries",
+          "type": "integer"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "topErrors": {
+          "description": "Most common error messages",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "topFaults": {
+          "description": "Most common fault messages",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "totalCount": {
+          "description": "Total number of log entries",
+          "type": "integer"
+        },
+        "type": {
+          "const": "summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "totalCount"
+      ],
+      "title": "Log Summary",
+      "type": "object"
+    },
+    "tmux": {
+      "description": "Information about created tmux session",
+      "properties": {
+        "attach": {
+          "description": "Command to attach to the session",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "session": {
+          "description": "Tmux session name",
+          "type": "string"
+        },
+        "type": {
+          "const": "tmux",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "session",
+        "attach"
+      ],
+      "title": "Tmux Session Info",
+      "type": "object"
+    },
+    "trigger": {
+      "description": "Notification when a trigger fires",
+      "properties": {
+        "command": {
+          "description": "Command being executed",
+          "type": "string"
+        },
+        "match": {
+          "description": "Log message that triggered the action",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "trigger_type": {
+          "description": "Type of trigger (error, fault, or pattern:regex)",
+          "type": "string"
+        },
+        "type": {
+          "const": "trigger",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "trigger_type",
+        "command"
+      ],
+      "title": "Trigger Event",
+      "type": "object"
+    },
+    "warning": {
+      "description": "Warning message from xcw",
+      "properties": {
+        "message": {
+          "description": "Warning message content",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "type": {
+          "const": "warning",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "message"
+      ],
+      "title": "Warning Message",
+      "type": "object"
+    }
+  },
+  "description": "JSON Schema definitions for all xcw NDJSON output types",
+  "schemaVersion": 1,
+  "title": "XcodeConsoleWatcher Output Schemas"
+}

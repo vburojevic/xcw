@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/vburojevic/xcw/internal/output"
 )
 
 // SchemaCmd outputs JSON Schema for xcw output types
@@ -24,23 +26,25 @@ func (c *SchemaCmd) Run(globals *Globals) error {
 		"trigger":   triggerSchema(),
 		"doctor":    doctorSchema(),
 		"app":       appSchema(),
+		"pick":      pickSchema(),
 	}
 
 	// Determine which schemas to output
 	typesToOutput := c.Type
 	if len(typesToOutput) == 0 {
-		typesToOutput = []string{"log", "summary", "heartbeat", "error", "tmux", "info", "warning", "trigger", "doctor", "app"}
+		typesToOutput = []string{"log", "summary", "heartbeat", "error", "tmux", "info", "warning", "trigger", "doctor", "app", "pick"}
 	}
 
 	// Build output
-	output := map[string]interface{}{
-		"$schema":     "http://json-schema.org/draft-07/schema#",
-		"title":       "XcodeConsoleWatcher Output Schemas",
-		"description": "JSON Schema definitions for all xcw NDJSON output types",
-		"definitions": map[string]interface{}{},
+	schemaOutput := map[string]interface{}{
+		"$schema":       "http://json-schema.org/draft-07/schema#",
+		"title":         "XcodeConsoleWatcher Output Schemas",
+		"description":   "JSON Schema definitions for all xcw NDJSON output types",
+		"schemaVersion": output.SchemaVersion,
+		"definitions":   map[string]interface{}{},
 	}
 
-	defs := output["definitions"].(map[string]interface{})
+	defs := schemaOutput["definitions"].(map[string]interface{})
 	for _, t := range typesToOutput {
 		t = strings.ToLower(strings.TrimSpace(t))
 		if schema, ok := schemas[t]; ok {
@@ -51,7 +55,16 @@ func (c *SchemaCmd) Run(globals *Globals) error {
 	// Output as JSON
 	encoder := json.NewEncoder(globals.Stdout)
 	encoder.SetIndent("", "  ")
-	return encoder.Encode(output)
+	return encoder.Encode(schemaOutput)
+}
+
+// schemaVersionProperty returns the schemaVersion property definition
+func schemaVersionProperty() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "integer",
+		"const":       output.SchemaVersion,
+		"description": "Schema version for compatibility detection",
+	}
 }
 
 func logSchema() map[string]interface{} {
@@ -60,6 +73,11 @@ func logSchema() map[string]interface{} {
 		"title":       "Log Entry",
 		"description": "A single log entry from the iOS Simulator",
 		"properties": map[string]interface{}{
+			"type": map[string]interface{}{
+				"type":  "string",
+				"const": "log",
+			},
+			"schemaVersion": schemaVersionProperty(),
 			"timestamp": map[string]interface{}{
 				"type":        "string",
 				"format":      "date-time",
@@ -91,7 +109,7 @@ func logSchema() map[string]interface{} {
 				"description": "The log message content",
 			},
 		},
-		"required": []string{"timestamp", "level", "process", "pid", "message"},
+		"required": []string{"type", "schemaVersion", "timestamp", "level", "process", "pid", "message"},
 	}
 }
 
@@ -105,6 +123,7 @@ func summarySchema() map[string]interface{} {
 				"type":  "string",
 				"const": "summary",
 			},
+			"schemaVersion": schemaVersionProperty(),
 			"totalCount": map[string]interface{}{
 				"type":        "integer",
 				"description": "Total number of log entries",
@@ -152,7 +171,7 @@ func summarySchema() map[string]interface{} {
 				"description": "Most common fault messages",
 			},
 		},
-		"required": []string{"type", "totalCount"},
+		"required": []string{"type", "schemaVersion", "totalCount"},
 	}
 }
 
@@ -166,6 +185,7 @@ func heartbeatSchema() map[string]interface{} {
 				"type":  "string",
 				"const": "heartbeat",
 			},
+			"schemaVersion": schemaVersionProperty(),
 			"timestamp": map[string]interface{}{
 				"type":        "string",
 				"format":      "date-time",
@@ -180,7 +200,7 @@ func heartbeatSchema() map[string]interface{} {
 				"description": "Number of logs since last heartbeat",
 			},
 		},
-		"required": []string{"type", "timestamp", "uptime_seconds", "logs_since_last"},
+		"required": []string{"type", "schemaVersion", "timestamp", "uptime_seconds", "logs_since_last"},
 	}
 }
 
@@ -194,19 +214,40 @@ func errorSchema() map[string]interface{} {
 				"type":  "string",
 				"const": "error",
 			},
+			"schemaVersion": schemaVersionProperty(),
 			"code": map[string]interface{}{
 				"type":        "string",
-				"description": "Error code (e.g., DEVICE_NOT_FOUND, INVALID_PATTERN)",
+				"description": "Machine-readable error code for programmatic handling",
 				"enum": []string{
 					"DEVICE_NOT_FOUND",
 					"NO_BOOTED_SIMULATOR",
+					"INVALID_FLAGS",
 					"INVALID_PATTERN",
 					"INVALID_EXCLUDE_PATTERN",
 					"INVALID_DURATION",
+					"INVALID_UNTIL",
 					"INVALID_INTERVAL",
 					"INVALID_HEARTBEAT",
+					"INVALID_ROTATE_SIZE",
+					"INVALID_COOLDOWN",
+					"INVALID_TRIGGER",
+					"INVALID_TRIGGER_PATTERN",
+					"INVALID_TRIGGER_TIMEOUT",
 					"STREAM_FAILED",
 					"QUERY_FAILED",
+					"LIST_FAILED",
+					"LIST_APPS_FAILED",
+					"FILE_NOT_FOUND",
+					"READ_ERROR",
+					"NO_ENTRIES",
+					"DEVICE_NOT_BOOTED",
+					"TMUX_NOT_INSTALLED",
+					"TMUX_ERROR",
+					"SESSION_NOT_FOUND",
+					"CLEAR_FAILED",
+					"NOT_INTERACTIVE",
+					"NO_SIMULATORS",
+					"NO_APPS",
 				},
 			},
 			"message": map[string]interface{}{
@@ -214,7 +255,7 @@ func errorSchema() map[string]interface{} {
 				"description": "Human-readable error description",
 			},
 		},
-		"required": []string{"type", "code", "message"},
+		"required": []string{"type", "schemaVersion", "code", "message"},
 	}
 }
 
@@ -228,6 +269,7 @@ func tmuxSchema() map[string]interface{} {
 				"type":  "string",
 				"const": "tmux",
 			},
+			"schemaVersion": schemaVersionProperty(),
 			"session": map[string]interface{}{
 				"type":        "string",
 				"description": "Tmux session name",
@@ -237,7 +279,7 @@ func tmuxSchema() map[string]interface{} {
 				"description": "Command to attach to the session",
 			},
 		},
-		"required": []string{"type", "session", "attach"},
+		"required": []string{"type", "schemaVersion", "session", "attach"},
 	}
 }
 
@@ -251,6 +293,7 @@ func infoSchema() map[string]interface{} {
 				"type":  "string",
 				"const": "info",
 			},
+			"schemaVersion": schemaVersionProperty(),
 			"message": map[string]interface{}{
 				"type":        "string",
 				"description": "Info message content",
@@ -264,7 +307,7 @@ func infoSchema() map[string]interface{} {
 				"description": "Device UDID if applicable",
 			},
 		},
-		"required": []string{"type", "message"},
+		"required": []string{"type", "schemaVersion", "message"},
 	}
 }
 
@@ -278,12 +321,13 @@ func warningSchema() map[string]interface{} {
 				"type":  "string",
 				"const": "warning",
 			},
+			"schemaVersion": schemaVersionProperty(),
 			"message": map[string]interface{}{
 				"type":        "string",
 				"description": "Warning message content",
 			},
 		},
-		"required": []string{"type", "message"},
+		"required": []string{"type", "schemaVersion", "message"},
 	}
 }
 
@@ -297,6 +341,7 @@ func triggerSchema() map[string]interface{} {
 				"type":  "string",
 				"const": "trigger",
 			},
+			"schemaVersion": schemaVersionProperty(),
 			"trigger_type": map[string]interface{}{
 				"type":        "string",
 				"description": "Type of trigger (error, fault, or pattern:regex)",
@@ -310,7 +355,7 @@ func triggerSchema() map[string]interface{} {
 				"description": "Log message that triggered the action",
 			},
 		},
-		"required": []string{"type", "trigger_type", "command"},
+		"required": []string{"type", "schemaVersion", "trigger_type", "command"},
 	}
 }
 
@@ -324,6 +369,7 @@ func doctorSchema() map[string]interface{} {
 				"type":  "string",
 				"const": "doctor",
 			},
+			"schemaVersion": schemaVersionProperty(),
 			"timestamp": map[string]interface{}{
 				"type":        "string",
 				"format":      "date-time",
@@ -369,7 +415,7 @@ func doctorSchema() map[string]interface{} {
 				"description": "Number of checks with warning status",
 			},
 		},
-		"required": []string{"type", "timestamp", "checks", "all_passed"},
+		"required": []string{"type", "schemaVersion", "timestamp", "checks", "all_passed"},
 	}
 }
 
@@ -383,6 +429,7 @@ func appSchema() map[string]interface{} {
 				"type":  "string",
 				"const": "app",
 			},
+			"schemaVersion": schemaVersionProperty(),
 			"bundle_id": map[string]interface{}{
 				"type":        "string",
 				"description": "App bundle identifier",
@@ -409,7 +456,40 @@ func appSchema() map[string]interface{} {
 				"description": "Path to app bundle",
 			},
 		},
-		"required": []string{"type", "bundle_id", "name", "app_type"},
+		"required": []string{"type", "schemaVersion", "bundle_id", "name", "app_type"},
+	}
+}
+
+func pickSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "object",
+		"title":       "Pick Result",
+		"description": "Result from interactive simulator or app selection",
+		"properties": map[string]interface{}{
+			"type": map[string]interface{}{
+				"type":  "string",
+				"const": "pick",
+			},
+			"schemaVersion": schemaVersionProperty(),
+			"picked": map[string]interface{}{
+				"type":        "string",
+				"enum":        []string{"simulator", "app"},
+				"description": "What was picked: simulator or app",
+			},
+			"udid": map[string]interface{}{
+				"type":        "string",
+				"description": "Simulator UDID (when picking simulator)",
+			},
+			"name": map[string]interface{}{
+				"type":        "string",
+				"description": "Display name of the selected item",
+			},
+			"bundle_id": map[string]interface{}{
+				"type":        "string",
+				"description": "App bundle identifier (when picking app)",
+			},
+		},
+		"required": []string{"type", "schemaVersion", "picked", "name"},
 	}
 }
 
@@ -427,6 +507,7 @@ func (c *SchemaCmd) outputTextHelp(globals *Globals) {
 	fmt.Fprintln(globals.Stdout, "  trigger   - Trigger event notification")
 	fmt.Fprintln(globals.Stdout, "  doctor    - System diagnostic report")
 	fmt.Fprintln(globals.Stdout, "  app       - Installed app info")
+	fmt.Fprintln(globals.Stdout, "  pick      - Interactive selection result")
 	fmt.Fprintln(globals.Stdout, "")
 	fmt.Fprintln(globals.Stdout, "Use --type to filter: xcw schema --type log,error")
 }
