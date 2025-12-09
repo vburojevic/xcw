@@ -12,7 +12,7 @@ import (
 type CLI struct {
 	// Global flags
 	Format  string `short:"f" default:"ndjson" enum:"ndjson,text" help:"Output format"`
-	Level   string `short:"l" default:"default" enum:"debug,info,default,error,fault" help:"Minimum log level"`
+	Level   string `short:"l" default:"debug" enum:"debug,info,default,error,fault" help:"Minimum log level"`
 	Quiet   bool   `short:"q" help:"Suppress non-log output (only emit log entries)"`
 	Verbose bool   `short:"v" help:"Show debug output (predicates, reconnections, internal state)"`
 	Version VersionCmd `cmd:"" help:"Show version information"`

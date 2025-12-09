@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2024-12-09
+
+### Changed
+- Default log level changed from `default` to `debug` - now shows all logs by default
+  - Use `-l error` to filter to errors only
+  - Use `-l default` for previous behavior
+
 ## [0.5.0] - 2024-12-09
 
 ### Added
