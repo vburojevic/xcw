@@ -101,8 +101,14 @@ func (r *QueryReader) Query(ctx context.Context, udid string, opts QueryOptions)
 func (r *QueryReader) buildArgs(udid string, opts QueryOptions) []string {
 	args := []string{"simctl", "spawn", udid, "log", "show", "--style", "ndjson"}
 
-	// Time range
-	if opts.Since > 0 {
+	// Time range: use --start/--end when Until is set, otherwise --last
+	if !opts.Until.IsZero() {
+		// Absolute time range with --start and --end
+		start := time.Now().Add(-opts.Since)
+		args = append(args, "--start", start.Format(time.RFC3339))
+		args = append(args, "--end", opts.Until.Format(time.RFC3339))
+	} else if opts.Since > 0 {
+		// Relative duration with --last
 		args = append(args, "--last", formatDuration(opts.Since))
 	}
 

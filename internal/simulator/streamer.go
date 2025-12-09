@@ -111,7 +111,11 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 		device, err := s.manager.GetDeviceInfo(ctx, s.udid)
 		if err != nil {
 			s.sendError(fmt.Errorf("failed to get device info: %w", err))
-			time.Sleep(backoff)
+			select {
+			case <-time.After(backoff):
+			case <-ctx.Done():
+				return
+			}
 			backoff = min(backoff*2, maxBackoff)
 			continue
 		}
@@ -120,7 +124,11 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 			// Try to boot the device
 			if err := s.manager.BootDevice(ctx, s.udid); err != nil {
 				s.sendError(fmt.Errorf("failed to boot device: %w", err))
-				time.Sleep(backoff)
+				select {
+				case <-time.After(backoff):
+				case <-ctx.Done():
+					return
+				}
 				backoff = min(backoff*2, maxBackoff)
 				continue
 			}
@@ -145,8 +153,7 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		default:
-			time.Sleep(backoff)
+		case <-time.After(backoff):
 			backoff = min(backoff*2, maxBackoff)
 		}
 	}

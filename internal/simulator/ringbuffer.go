@@ -98,9 +98,20 @@ func (rb *RingBuffer) CountByLevel() map[domain.LogLevel]int {
 	defer rb.mu.RUnlock()
 
 	counts := make(map[domain.LogLevel]int)
-	entries := rb.GetAll()
-	for _, e := range entries {
-		counts[e.Level]++
+
+	// Iterate directly over buffer entries without allocating a slice
+	if rb.count < rb.size {
+		// Buffer not full, entries are from 0 to count-1
+		for i := 0; i < rb.count; i++ {
+			counts[rb.buffer[i].Level]++
+		}
+	} else {
+		// Buffer full, iterate from head (oldest) wrapping around
+		for i := 0; i < rb.count; i++ {
+			idx := (rb.head + i) % rb.size
+			counts[rb.buffer[idx].Level]++
+		}
 	}
+
 	return counts
 }

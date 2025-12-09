@@ -61,6 +61,15 @@ func (c *QueryCmd) Run(globals *Globals) error {
 		return c.outputError(globals, "INVALID_DURATION", fmt.Sprintf("invalid since duration: %s", err))
 	}
 
+	// Parse until time if provided (RFC3339 or relative duration)
+	var until time.Time
+	if c.Until != "" {
+		until, err = parseTimeOrDuration(c.Until)
+		if err != nil {
+			return c.outputError(globals, "INVALID_UNTIL", fmt.Sprintf("invalid until time: %s", err))
+		}
+	}
+
 	// Compile pattern regex if provided
 	var pattern *regexp.Regexp
 	if c.Pattern != "" {
@@ -103,6 +112,7 @@ func (c *QueryCmd) Run(globals *Globals) error {
 		ExcludePattern:    excludePattern,
 		ExcludeSubsystems: c.ExcludeSubsystem,
 		Since:             since,
+		Until:             until,
 		Limit:             c.Limit,
 		RawPredicate:      c.Predicate,
 	}
@@ -175,4 +185,20 @@ func (c *QueryCmd) outputError(globals *Globals, code, message string) error {
 		fmt.Fprintf(globals.Stderr, "Error [%s]: %s\n", code, message)
 	}
 	return errors.New(message)
+}
+
+// parseTimeOrDuration parses a time string as either RFC3339 or a duration offset from now
+// Examples: "2024-01-15T10:30:00Z" (absolute), "5m" (5 minutes ago), "1h" (1 hour ago)
+func parseTimeOrDuration(s string) (time.Time, error) {
+	// Try RFC3339 first
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+
+	// Try duration (relative to now)
+	if d, err := time.ParseDuration(s); err == nil {
+		return time.Now().Add(-d), nil
+	}
+
+	return time.Time{}, fmt.Errorf("must be RFC3339 (e.g., 2024-01-15T10:30:00Z) or duration (e.g., 5m, 1h)")
 }

@@ -102,6 +102,20 @@ func (e *MultipleBootedError) Error() string {
 	return fmt.Sprintf("multiple booted simulators found:\n  %s\nUse --simulator to specify one", strings.Join(names, "\n  "))
 }
 
+// AmbiguousDeviceError is returned when a fuzzy search matches multiple devices
+type AmbiguousDeviceError struct {
+	Query   string
+	Matches []domain.Device
+}
+
+func (e *AmbiguousDeviceError) Error() string {
+	var names []string
+	for _, d := range e.Matches {
+		names = append(names, fmt.Sprintf("%s (%s)", d.Name, d.UDID))
+	}
+	return fmt.Sprintf("ambiguous device query %q matches multiple simulators:\n  %s\nBe more specific or use the full UDID", e.Query, strings.Join(names, "\n  "))
+}
+
 // FindBootedDevice finds a single booted device, errors if 0 or multiple
 func (m *Manager) FindBootedDevice(ctx context.Context) (*domain.Device, error) {
 	booted, err := m.ListBootedDevices(ctx)
@@ -140,11 +154,19 @@ func (m *Manager) FindDevice(ctx context.Context, nameOrUDID string) (*domain.De
 		}
 	}
 
-	// Fuzzy match by name (contains)
+	// Fuzzy match by name (contains) - collect all matches
+	var fuzzyMatches []domain.Device
 	for _, d := range devices {
 		if strings.Contains(strings.ToLower(d.Name), nameOrUDIDLower) {
-			return &d, nil
+			fuzzyMatches = append(fuzzyMatches, d)
 		}
+	}
+
+	if len(fuzzyMatches) == 1 {
+		return &fuzzyMatches[0], nil
+	}
+	if len(fuzzyMatches) > 1 {
+		return nil, &AmbiguousDeviceError{Query: nameOrUDID, Matches: fuzzyMatches}
 	}
 
 	return nil, fmt.Errorf("device not found: %s", nameOrUDID)
