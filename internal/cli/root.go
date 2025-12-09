@@ -19,6 +19,8 @@ type CLI struct {
 	Update  UpdateCmd  `cmd:"" help:"Show how to upgrade xcw"`
 
 	// Commands
+	Help       HelpCmd       `cmd:"" help:"Show comprehensive documentation (use --json for AI agents)"`
+	Examples   ExamplesCmd   `cmd:"" help:"Show usage examples for xcw commands"`
 	List       ListCmd       `cmd:"" help:"List available simulators"`
 	Tail       TailCmd       `cmd:"" default:"withargs" help:"Stream logs from a running simulator"`
 	Query      QueryCmd      `cmd:"" help:"Query historical logs from simulator"`
