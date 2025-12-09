@@ -4,7 +4,8 @@ import "time"
 
 // LogSummary provides AI-friendly aggregated log statistics
 type LogSummary struct {
-	Type string `json:"type"` // Always "summary"
+	Type          string `json:"type"`          // Always "summary"
+	SchemaVersion int    `json:"schemaVersion"` // Schema version for compatibility
 
 	// Time window
 	WindowStart time.Time `json:"windowStart"`
@@ -39,12 +40,14 @@ func NewLogSummary() *LogSummary {
 
 // ErrorOutput represents a structured error for NDJSON output
 type ErrorOutput struct {
-	Type    string `json:"type"`    // Always "error"
-	Code    string `json:"code"`    // Machine-readable error code
-	Message string `json:"message"` // Human-readable message
+	Type          string `json:"type"`          // Always "error"
+	SchemaVersion int    `json:"schemaVersion"` // Schema version for compatibility
+	Code          string `json:"code"`          // Machine-readable error code
+	Message       string `json:"message"`       // Human-readable message
 }
 
 // NewErrorOutput creates a new error output
+// Note: SchemaVersion should be set by the caller (output package)
 func NewErrorOutput(code, message string) *ErrorOutput {
 	return &ErrorOutput{
 		Type:    "error",

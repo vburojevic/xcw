@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -37,6 +38,9 @@ type WatchCmd struct {
 	TriggerTimeout      string   `default:"30s" help:"Maximum time for trigger command execution"`
 	MaxParallelTriggers int      `default:"5" help:"Maximum concurrent trigger executions"`
 	TriggerOutput       string   `default:"discard" enum:"inherit,discard,capture" help:"Trigger command output handling"`
+	Output              string   `short:"o" help:"Write output to explicit file path"`
+	SessionDir          string   `help:"Directory for session files (default: ~/.xcw/sessions)"`
+	SessionPrefix       string   `help:"Prefix for session filename (default: app bundle ID)"`
 	Tmux                bool     `help:"Output to tmux session"`
 	Session             string   `help:"Custom tmux session name (default: xcw-<simulator>)"`
 }
@@ -109,6 +113,51 @@ func (c *WatchCmd) Run(globals *Globals) error {
 	// Determine output destination
 	var outputWriter io.Writer = globals.Stdout
 	var tmuxMgr *tmux.Manager
+	var outputFile *os.File
+	var bufferedWriter *bufio.Writer
+
+	// Determine output file path
+	var outputPath string
+	if c.Output != "" {
+		// Explicit --output overrides session behavior
+		outputPath = c.Output
+	} else if c.SessionDir != "" || c.SessionPrefix != "" {
+		// Session-based file output
+		prefix := c.SessionPrefix
+		if prefix == "" {
+			prefix = c.App
+		}
+		path, err := GenerateSessionPath(c.SessionDir, prefix)
+		if err != nil {
+			return c.outputError(globals, "SESSION_DIR_ERROR", err.Error())
+		}
+		outputPath = path
+	}
+
+	// Create file output if path is set
+	if outputPath != "" {
+		var err error
+		outputFile, err = os.Create(outputPath)
+		if err != nil {
+			return c.outputError(globals, "FILE_CREATE_ERROR", fmt.Sprintf("failed to create output file: %s", err))
+		}
+		defer outputFile.Close()
+
+		bufferedWriter = bufio.NewWriter(outputFile)
+		defer bufferedWriter.Flush()
+
+		outputWriter = bufferedWriter
+
+		if !globals.Quiet {
+			if globals.Format == "ndjson" {
+				output.NewNDJSONWriter(globals.Stdout).WriteInfo(
+					fmt.Sprintf("Writing logs to %s", outputPath),
+					device.Name, device.UDID, "", "")
+			} else {
+				fmt.Fprintf(globals.Stderr, "Writing logs to %s\n", outputPath)
+			}
+		}
+	}
 
 	if c.Tmux {
 		sessionName := c.Session

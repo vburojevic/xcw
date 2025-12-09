@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/vburojevic/xcw/internal/config"
+	"github.com/vburojevic/xcw/internal/output"
 	"github.com/vburojevic/xcw/internal/simulator"
 )
 
@@ -27,12 +28,13 @@ type checkResult struct {
 
 // doctorReport is the complete diagnostic report
 type doctorReport struct {
-	Type       string        `json:"type"`
-	Timestamp  string        `json:"timestamp"`
-	Checks     []checkResult `json:"checks"`
-	AllPassed  bool          `json:"all_passed"`
-	ErrorCount int           `json:"error_count"`
-	WarnCount  int           `json:"warn_count"`
+	Type          string        `json:"type"`
+	SchemaVersion int           `json:"schemaVersion"`
+	Timestamp     string        `json:"timestamp"`
+	Checks        []checkResult `json:"checks"`
+	AllPassed     bool          `json:"all_passed"`
+	ErrorCount    int           `json:"error_count"`
+	WarnCount     int           `json:"warn_count"`
 }
 
 // Run executes the doctor command
@@ -72,12 +74,13 @@ func (c *DoctorCmd) Run(globals *Globals) error {
 	}
 
 	report := doctorReport{
-		Type:       "doctor",
-		Timestamp:  time.Now().Format(time.RFC3339),
-		Checks:     checks,
-		AllPassed:  errorCount == 0,
-		ErrorCount: errorCount,
-		WarnCount:  warnCount,
+		Type:          "doctor",
+		SchemaVersion: output.SchemaVersion,
+		Timestamp:     time.Now().Format(time.RFC3339),
+		Checks:        checks,
+		AllPassed:     errorCount == 0,
+		ErrorCount:    errorCount,
+		WarnCount:     warnCount,
 	}
 
 	if globals.Format == "ndjson" {

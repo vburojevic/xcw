@@ -115,7 +115,7 @@ func TestConfigGenerateCmd_Run(t *testing.T) {
 // --- Schema Command Tests ---
 
 func TestSchemaCmd_Run(t *testing.T) {
-	t.Run("outputs all schemas by default", func(t *testing.T) {
+	t.Run("outputs all schemas by default with schemaVersion", func(t *testing.T) {
 		globals, stdout, _ := testGlobals("ndjson")
 		cmd := &SchemaCmd{}
 
@@ -128,6 +128,7 @@ func TestSchemaCmd_Run(t *testing.T) {
 
 		assert.Equal(t, "http://json-schema.org/draft-07/schema#", result["$schema"])
 		assert.Equal(t, "XcodeConsoleWatcher Output Schemas", result["title"])
+		assert.NotNil(t, result["schemaVersion"], "top-level schemaVersion should exist")
 
 		defs := result["definitions"].(map[string]interface{})
 		assert.Contains(t, defs, "log")
@@ -136,6 +137,13 @@ func TestSchemaCmd_Run(t *testing.T) {
 		assert.Contains(t, defs, "error")
 		assert.Contains(t, defs, "doctor")
 		assert.Contains(t, defs, "app")
+
+		// Verify schemaVersion property exists in each definition
+		for name, def := range defs {
+			defMap := def.(map[string]interface{})
+			props := defMap["properties"].(map[string]interface{})
+			assert.Contains(t, props, "schemaVersion", "definition %s should have schemaVersion property", name)
+		}
 	})
 
 	t.Run("filters schemas by type", func(t *testing.T) {
@@ -164,11 +172,16 @@ func TestLogSchema(t *testing.T) {
 	assert.Equal(t, "Log Entry", schema["title"])
 
 	props := schema["properties"].(map[string]interface{})
+	assert.Contains(t, props, "schemaVersion")
 	assert.Contains(t, props, "timestamp")
 	assert.Contains(t, props, "level")
 	assert.Contains(t, props, "process")
 	assert.Contains(t, props, "pid")
 	assert.Contains(t, props, "message")
+
+	// Verify schemaVersion is required
+	required := schema["required"].([]string)
+	assert.Contains(t, required, "schemaVersion")
 }
 
 func TestDoctorSchema(t *testing.T) {
@@ -178,9 +191,14 @@ func TestDoctorSchema(t *testing.T) {
 	assert.Equal(t, "Doctor Report", schema["title"])
 
 	props := schema["properties"].(map[string]interface{})
+	assert.Contains(t, props, "schemaVersion")
 	assert.Contains(t, props, "checks")
 	assert.Contains(t, props, "all_passed")
 	assert.Contains(t, props, "error_count")
+
+	// Verify schemaVersion is required
+	required := schema["required"].([]string)
+	assert.Contains(t, required, "schemaVersion")
 }
 
 func TestAppSchema(t *testing.T) {
@@ -190,54 +208,222 @@ func TestAppSchema(t *testing.T) {
 	assert.Equal(t, "Installed App", schema["title"])
 
 	props := schema["properties"].(map[string]interface{})
+	assert.Contains(t, props, "schemaVersion")
 	assert.Contains(t, props, "bundle_id")
 	assert.Contains(t, props, "name")
 	assert.Contains(t, props, "version")
 	assert.Contains(t, props, "app_type")
+
+	// Verify schemaVersion is required
+	required := schema["required"].([]string)
+	assert.Contains(t, required, "schemaVersion")
 }
 
-// --- Parse Size Tests ---
+func TestPickSchema(t *testing.T) {
+	schema := pickSchema()
 
-func TestParseSize(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected int
-		hasError bool
-	}{
-		// Valid inputs
-		{"10", 10, false},
-		{"10MB", 10, false},
-		{"10M", 10, false},
-		{"10mb", 10, false},
-		{"100KB", 1, false}, // Rounds up to 1 MB minimum
-		{"1KB", 1, false},   // Rounds up to 1 MB minimum
-		{"1GB", 1024, false},
-		{"2G", 2048, false},
-		{"1gb", 1024, false},
+	assert.Equal(t, "object", schema["type"])
+	assert.Equal(t, "Pick Result", schema["title"])
 
-		// Edge cases
-		{"0", 0, false},
-		{"1", 1, false},
+	props := schema["properties"].(map[string]interface{})
+	assert.Contains(t, props, "schemaVersion")
+	assert.Contains(t, props, "picked")
+	assert.Contains(t, props, "udid")
+	assert.Contains(t, props, "name")
+	assert.Contains(t, props, "bundle_id")
 
-		// Invalid inputs
-		{"", 0, true},
-		{"MB", 0, true},
-		{"abc", 0, true},
-		{"10XB", 0, true},
-		{"10.5MB", 0, true}, // Decimals not supported
+	// Verify schemaVersion is required
+	required := schema["required"].([]string)
+	assert.Contains(t, required, "schemaVersion")
+	assert.Contains(t, required, "picked")
+	assert.Contains(t, required, "name")
+}
+
+// --- Pick Command Tests ---
+
+func TestPickCmd_RequiresInteractive(t *testing.T) {
+	// This test verifies the pick command exists and has proper struct
+	cmd := PickCmd{
+		Type:     "simulator",
+		UserOnly: false,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result, err := parseSize(tt.input)
-			if tt.hasError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			}
-		})
+	assert.Equal(t, "simulator", cmd.Type)
+	assert.False(t, cmd.UserOnly)
+}
+
+func TestPickItem(t *testing.T) {
+	item := pickItem{
+		id:          "ABC-123-DEF",
+		title:       "iPhone 15 Pro",
+		description: "iOS 17.0",
 	}
+
+	assert.Equal(t, "iPhone 15 Pro", item.Title())
+	assert.Equal(t, "iOS 17.0", item.Description())
+	assert.Contains(t, item.FilterValue(), "iPhone 15 Pro")
+	assert.Contains(t, item.FilterValue(), "ABC-123-DEF")
+}
+
+// --- Session Tests ---
+
+func TestGenerateSessionPath(t *testing.T) {
+	t.Run("generates path in specified directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		path, err := GenerateSessionPath(tmpDir, "com.example.app")
+		require.NoError(t, err)
+
+		assert.True(t, strings.HasPrefix(path, tmpDir))
+		// Prefix is sanitized (dots become underscores)
+		assert.Contains(t, path, "com_example_app")
+		assert.True(t, strings.HasSuffix(path, ".ndjson"))
+	})
+
+	t.Run("creates directory if missing", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		subDir := filepath.Join(tmpDir, "sessions")
+		path, err := GenerateSessionPath(subDir, "test")
+		require.NoError(t, err)
+
+		_, err = os.Stat(subDir)
+		assert.NoError(t, err, "directory should be created")
+		assert.True(t, strings.HasPrefix(path, subDir))
+	})
+
+	t.Run("sanitizes prefix", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		path, err := GenerateSessionPath(tmpDir, "com.example/app:test")
+		require.NoError(t, err)
+
+		filename := filepath.Base(path)
+		assert.NotContains(t, filename, "/")
+		assert.NotContains(t, filename, ":")
+	})
+}
+
+func TestListSessions(t *testing.T) {
+	t.Run("lists sessions sorted by time", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create some session files with different timestamps
+		files := []string{
+			"20251209-100000-app.ndjson",
+			"20251209-120000-app.ndjson",
+			"20251209-110000-app.ndjson",
+		}
+		for _, f := range files {
+			os.WriteFile(filepath.Join(tmpDir, f), []byte("test"), 0644)
+		}
+
+		sessions, err := ListSessions(tmpDir)
+		require.NoError(t, err)
+		require.Len(t, sessions, 3)
+
+		// Should be sorted newest first
+		assert.Equal(t, "20251209-120000-app.ndjson", sessions[0].Name)
+		assert.Equal(t, "20251209-110000-app.ndjson", sessions[1].Name)
+		assert.Equal(t, "20251209-100000-app.ndjson", sessions[2].Name)
+	})
+
+	t.Run("returns empty for nonexistent directory", func(t *testing.T) {
+		sessions, err := ListSessions("/nonexistent/path")
+		require.NoError(t, err)
+		assert.Empty(t, sessions)
+	})
+
+	t.Run("ignores non-ndjson files", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		os.WriteFile(filepath.Join(tmpDir, "20251209-100000-app.ndjson"), []byte("test"), 0644)
+		os.WriteFile(filepath.Join(tmpDir, "other.txt"), []byte("test"), 0644)
+		os.WriteFile(filepath.Join(tmpDir, "readme.md"), []byte("test"), 0644)
+
+		sessions, err := ListSessions(tmpDir)
+		require.NoError(t, err)
+		assert.Len(t, sessions, 1)
+	})
+}
+
+func TestLatestSession(t *testing.T) {
+	t.Run("returns most recent session", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		files := []string{
+			"20251209-100000-app.ndjson",
+			"20251209-120000-app.ndjson",
+			"20251209-110000-app.ndjson",
+		}
+		for _, f := range files {
+			os.WriteFile(filepath.Join(tmpDir, f), []byte("test"), 0644)
+		}
+
+		session, err := LatestSession(tmpDir)
+		require.NoError(t, err)
+		require.NotNil(t, session)
+		assert.Equal(t, "20251209-120000-app.ndjson", session.Name)
+	})
+
+	t.Run("returns nil for empty directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		session, err := LatestSession(tmpDir)
+		require.NoError(t, err)
+		assert.Nil(t, session)
+	})
+}
+
+func TestCleanOldSessions(t *testing.T) {
+	t.Run("deletes oldest sessions keeping specified count", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		files := []string{
+			"20251209-100000-app.ndjson",
+			"20251209-110000-app.ndjson",
+			"20251209-120000-app.ndjson",
+			"20251209-130000-app.ndjson",
+			"20251209-140000-app.ndjson",
+		}
+		for _, f := range files {
+			os.WriteFile(filepath.Join(tmpDir, f), []byte("test"), 0644)
+		}
+
+		deleted, err := CleanOldSessions(tmpDir, 2)
+		require.NoError(t, err)
+		assert.Len(t, deleted, 3)
+
+		// Verify only 2 remain
+		remaining, _ := ListSessions(tmpDir)
+		assert.Len(t, remaining, 2)
+
+		// Should keep the newest
+		assert.Equal(t, "20251209-140000-app.ndjson", remaining[0].Name)
+		assert.Equal(t, "20251209-130000-app.ndjson", remaining[1].Name)
+	})
+
+	t.Run("does nothing if fewer sessions than keep count", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		os.WriteFile(filepath.Join(tmpDir, "20251209-100000-app.ndjson"), []byte("test"), 0644)
+
+		deleted, err := CleanOldSessions(tmpDir, 5)
+		require.NoError(t, err)
+		assert.Empty(t, deleted)
+	})
+}
+
+func TestSessionSchema(t *testing.T) {
+	schema := sessionSchema()
+
+	assert.Equal(t, "object", schema["type"])
+	assert.Equal(t, "Session File", schema["title"])
+
+	props := schema["properties"].(map[string]interface{})
+	assert.Contains(t, props, "schemaVersion")
+	assert.Contains(t, props, "path")
+	assert.Contains(t, props, "name")
+	assert.Contains(t, props, "timestamp")
+	assert.Contains(t, props, "size")
+
+	required := schema["required"].([]string)
+	assert.Contains(t, required, "schemaVersion")
+	assert.Contains(t, required, "path")
 }
 
 // --- Analyze Command Tests ---

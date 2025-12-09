@@ -9,7 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `xcw update` command showing upgrade instructions for Homebrew and Go install
+- `xcw sessions` command for managing session log files
+  - `xcw sessions list` - List session files sorted by date
+  - `xcw sessions show` - Show path to a session file (for piping)
+  - `xcw sessions clean` - Delete old session files, keeping most recent
+- Session-based file output for `tail` and `watch` commands
+  - `--session-dir` - Directory for session files (default: ~/.xcw/sessions)
+  - `--session-prefix` - Prefix for session filename (default: app bundle ID)
+  - Files are named with timestamps: `20251209-153045-com.example.app.ndjson`
+- File output support for `watch` command (`--output`, `--session-dir`, `--session-prefix`)
 - CHANGELOG.md for version history tracking
+
+### Changed
+- File output now creates fresh per-session files instead of rotating logs
+- Removed lumberjack dependency for simpler, lighter codebase
+
+### Removed
+- **Breaking:** `--rotate-size` and `--rotate-count` flags from `tail` command
+  - Use `--session-dir` for automatic timestamped session files instead
+  - For explicit file output, use `--output` (no rotation)
 
 ## [0.1.0] - 2024-12-09
 
@@ -44,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Advanced Features**
   - Pattern persistence for tracking known vs new errors
-  - File output with rotation (`--output`, `--rotate-size`)
+  - File output with session-based naming (`--output`, `--session-dir`)
   - Heartbeat messages for connection health
   - Periodic summary markers
   - Tmux integration for persistent sessions

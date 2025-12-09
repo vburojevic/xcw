@@ -175,30 +175,33 @@ type PatternMatch struct {
 
 // SummaryOutput wraps a summary for NDJSON output with timing
 type SummaryOutput struct {
-	Type      string             `json:"type"`
-	Timestamp time.Time          `json:"timestamp"`
-	Summary   *domain.LogSummary `json:"summary"`
-	Patterns  []PatternMatch     `json:"patterns,omitempty"`
+	Type          string             `json:"type"`
+	SchemaVersion int                `json:"schemaVersion"`
+	Timestamp     time.Time          `json:"timestamp"`
+	Summary       *domain.LogSummary `json:"summary"`
+	Patterns      []PatternMatch     `json:"patterns,omitempty"`
 }
 
 // NewSummaryOutput creates a summary output wrapper
 func NewSummaryOutput(summary *domain.LogSummary, patterns []PatternMatch) *SummaryOutput {
 	return &SummaryOutput{
-		Type:      "analysis",
-		Timestamp: time.Now(),
-		Summary:   summary,
-		Patterns:  patterns,
+		Type:          "analysis",
+		SchemaVersion: SchemaVersion,
+		Timestamp:     time.Now(),
+		Summary:       summary,
+		Patterns:      patterns,
 	}
 }
 
 // EnhancedSummaryOutput includes enhanced pattern info with known/new status
 type EnhancedSummaryOutput struct {
-	Type             string                 `json:"type"`
-	Timestamp        time.Time              `json:"timestamp"`
-	Summary          *domain.LogSummary     `json:"summary"`
-	Patterns         []EnhancedPatternMatch `json:"patterns,omitempty"`
-	NewPatternCount  int                    `json:"new_pattern_count"`
-	KnownPatternCount int                   `json:"known_pattern_count"`
+	Type              string                 `json:"type"`
+	SchemaVersion     int                    `json:"schemaVersion"`
+	Timestamp         time.Time              `json:"timestamp"`
+	Summary           *domain.LogSummary     `json:"summary"`
+	Patterns          []EnhancedPatternMatch `json:"patterns,omitempty"`
+	NewPatternCount   int                    `json:"new_pattern_count"`
+	KnownPatternCount int                    `json:"known_pattern_count"`
 }
 
 // NewEnhancedSummaryOutput creates an enhanced summary output wrapper
@@ -215,6 +218,7 @@ func NewEnhancedSummaryOutput(summary *domain.LogSummary, patterns []EnhancedPat
 
 	return &EnhancedSummaryOutput{
 		Type:              "analysis",
+		SchemaVersion:     SchemaVersion,
 		Timestamp:         time.Now(),
 		Summary:           summary,
 		Patterns:          patterns,

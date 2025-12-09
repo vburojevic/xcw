@@ -28,12 +28,13 @@ func (c *SchemaCmd) Run(globals *Globals) error {
 		"app":       appSchema(),
 		"pick":      pickSchema(),
 		"update":    updateSchema(),
+		"session":   sessionSchema(),
 	}
 
 	// Determine which schemas to output
 	typesToOutput := c.Type
 	if len(typesToOutput) == 0 {
-		typesToOutput = []string{"log", "summary", "heartbeat", "error", "tmux", "info", "warning", "trigger", "doctor", "app", "pick", "update"}
+		typesToOutput = []string{"log", "summary", "heartbeat", "error", "tmux", "info", "warning", "trigger", "doctor", "app", "pick", "update", "session"}
 	}
 
 	// Build output
@@ -229,7 +230,6 @@ func errorSchema() map[string]interface{} {
 					"INVALID_UNTIL",
 					"INVALID_INTERVAL",
 					"INVALID_HEARTBEAT",
-					"INVALID_ROTATE_SIZE",
 					"INVALID_COOLDOWN",
 					"INVALID_TRIGGER",
 					"INVALID_TRIGGER_PATTERN",
@@ -239,12 +239,19 @@ func errorSchema() map[string]interface{} {
 					"LIST_FAILED",
 					"LIST_APPS_FAILED",
 					"FILE_NOT_FOUND",
+					"FILE_CREATE_ERROR",
 					"READ_ERROR",
 					"NO_ENTRIES",
 					"DEVICE_NOT_BOOTED",
 					"TMUX_NOT_INSTALLED",
 					"TMUX_ERROR",
 					"SESSION_NOT_FOUND",
+					"SESSION_DIR_ERROR",
+					"SESSION_ERROR",
+					"LIST_SESSIONS_ERROR",
+					"INVALID_INDEX",
+					"NO_SESSIONS",
+					"CLEAN_ERROR",
 					"CLEAR_FAILED",
 					"NOT_INTERACTIVE",
 					"NO_SIMULATORS",
@@ -531,6 +538,43 @@ func updateSchema() map[string]interface{} {
 	}
 }
 
+func sessionSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "object",
+		"title":       "Session File",
+		"description": "Information about a session log file",
+		"properties": map[string]interface{}{
+			"type": map[string]interface{}{
+				"type":  "string",
+				"const": "session",
+			},
+			"schemaVersion": schemaVersionProperty(),
+			"path": map[string]interface{}{
+				"type":        "string",
+				"description": "Full path to the session file",
+			},
+			"name": map[string]interface{}{
+				"type":        "string",
+				"description": "Session filename",
+			},
+			"timestamp": map[string]interface{}{
+				"type":        "string",
+				"format":      "date-time",
+				"description": "When the session was created",
+			},
+			"size": map[string]interface{}{
+				"type":        "integer",
+				"description": "File size in bytes",
+			},
+			"prefix": map[string]interface{}{
+				"type":        "string",
+				"description": "Session prefix (usually app bundle ID)",
+			},
+		},
+		"required": []string{"type", "schemaVersion", "path", "name", "timestamp", "size"},
+	}
+}
+
 // Helper to output a quick reference
 func (c *SchemaCmd) outputTextHelp(globals *Globals) {
 	fmt.Fprintln(globals.Stdout, "XcodeConsoleWatcher Output Types:")
@@ -547,6 +591,7 @@ func (c *SchemaCmd) outputTextHelp(globals *Globals) {
 	fmt.Fprintln(globals.Stdout, "  app       - Installed app info")
 	fmt.Fprintln(globals.Stdout, "  pick      - Interactive selection result")
 	fmt.Fprintln(globals.Stdout, "  update    - Upgrade instructions")
+	fmt.Fprintln(globals.Stdout, "  session   - Session file info")
 	fmt.Fprintln(globals.Stdout, "")
 	fmt.Fprintln(globals.Stdout, "Use --type to filter: xcw schema --type log,error")
 }

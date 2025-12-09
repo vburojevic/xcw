@@ -101,11 +101,12 @@ func (c *AppsCmd) Run(globals *Globals) error {
 		encoder := json.NewEncoder(globals.Stdout)
 		for _, app := range apps {
 			entry := map[string]interface{}{
-				"type":       "app",
-				"bundle_id":  app.BundleID,
-				"name":       app.Name,
-				"version":    app.Version,
-				"app_type":   app.Type,
+				"type":          "app",
+				"schemaVersion": output.SchemaVersion,
+				"bundle_id":     app.BundleID,
+				"name":          app.Name,
+				"version":       app.Version,
+				"app_type":      app.Type,
 			}
 			if app.BuildNumber != "" {
 				entry["build_number"] = app.BuildNumber
@@ -118,10 +119,11 @@ func (c *AppsCmd) Run(globals *Globals) error {
 
 		// Summary
 		summary := map[string]interface{}{
-			"type":       "apps_summary",
-			"device":     device.Name,
-			"udid":       device.UDID,
-			"total":      len(apps),
+			"type":          "apps_summary",
+			"schemaVersion": output.SchemaVersion,
+			"device":        device.Name,
+			"udid":          device.UDID,
+			"total":         len(apps),
 		}
 		encoder.Encode(summary)
 	} else {

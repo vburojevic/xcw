@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -8,8 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
-	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -17,7 +16,6 @@ import (
 	"github.com/vburojevic/xcw/internal/output"
 	"github.com/vburojevic/xcw/internal/simulator"
 	"github.com/vburojevic/xcw/internal/tmux"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // TailCmd streams real-time logs from a simulator
@@ -36,9 +34,9 @@ type TailCmd struct {
 	BufferSize       int      `default:"100" help:"Number of recent logs to buffer"`
 	SummaryInterval  string   `help:"Emit periodic summaries (e.g., '30s', '1m')"`
 	Heartbeat        string   `help:"Emit periodic heartbeat messages (e.g., '10s', '30s')"`
-	Output           string   `short:"o" help:"Write output to file (supports rotation with --rotate-*)"`
-	RotateSize       string   `help:"Rotate log file when it reaches this size (e.g., '10MB', '100KB')"`
-	RotateCount      int      `default:"5" help:"Number of rotated files to keep"`
+	Output           string   `short:"o" help:"Write output to explicit file path"`
+	SessionDir       string   `help:"Directory for session files (default: ~/.xcw/sessions)"`
+	SessionPrefix    string   `help:"Prefix for session filename (default: app bundle ID)"`
 	Tmux             bool     `help:"Output to tmux session"`
 	Session          string   `help:"Custom tmux session name (default: xcw-<simulator>)"`
 }
@@ -81,37 +79,49 @@ func (c *TailCmd) Run(globals *Globals) error {
 	// Determine output destination
 	var outputWriter io.Writer = globals.Stdout
 	var tmuxMgr *tmux.Manager
-	var fileLogger *lumberjack.Logger
+	var outputFile *os.File
+	var bufferedWriter *bufio.Writer
 
-	// File output with optional rotation
+	// Determine output file path
+	var outputPath string
 	if c.Output != "" {
-		maxSize := 100 // Default 100 MB
-		if c.RotateSize != "" {
-			size, err := parseSize(c.RotateSize)
-			if err != nil {
-				return c.outputError(globals, "INVALID_ROTATE_SIZE", err.Error())
-			}
-			maxSize = size
+		// Explicit --output overrides session behavior
+		outputPath = c.Output
+	} else if c.SessionDir != "" || c.SessionPrefix != "" {
+		// Session-based file output
+		prefix := c.SessionPrefix
+		if prefix == "" {
+			prefix = c.App
 		}
-
-		fileLogger = &lumberjack.Logger{
-			Filename:   c.Output,
-			MaxSize:    maxSize,
-			MaxBackups: c.RotateCount,
-			Compress:   true,
+		path, err := GenerateSessionPath(c.SessionDir, prefix)
+		if err != nil {
+			return c.outputError(globals, "SESSION_DIR_ERROR", err.Error())
 		}
-		defer fileLogger.Close()
+		outputPath = path
+	}
 
-		outputWriter = fileLogger
-		globals.Debug("Writing to file: %s (max size: %dMB, keep: %d)", c.Output, maxSize, c.RotateCount)
+	// Create file output if path is set
+	if outputPath != "" {
+		var err error
+		outputFile, err = os.Create(outputPath)
+		if err != nil {
+			return c.outputError(globals, "FILE_CREATE_ERROR", fmt.Sprintf("failed to create output file: %s", err))
+		}
+		defer outputFile.Close()
+
+		bufferedWriter = bufio.NewWriter(outputFile)
+		defer bufferedWriter.Flush()
+
+		outputWriter = bufferedWriter
+		globals.Debug("Writing to file: %s", outputPath)
 
 		if !globals.Quiet {
 			if globals.Format == "ndjson" {
 				output.NewNDJSONWriter(globals.Stdout).WriteInfo(
-					fmt.Sprintf("Writing logs to %s", c.Output),
+					fmt.Sprintf("Writing logs to %s", outputPath),
 					device.Name, device.UDID, "", "")
 			} else {
-				fmt.Fprintf(globals.Stderr, "Writing logs to %s\n", c.Output)
+				fmt.Fprintf(globals.Stderr, "Writing logs to %s\n", outputPath)
 			}
 		}
 	}
@@ -355,48 +365,4 @@ func (c *TailCmd) outputError(globals *Globals, code, message string) error {
 		fmt.Fprintf(globals.Stderr, "Error [%s]: %s\n", code, message)
 	}
 	return errors.New(message)
-}
-
-// parseSize parses a size string like "10MB", "100KB", "1GB" into megabytes
-func parseSize(s string) (int, error) {
-	s = strings.TrimSpace(strings.ToUpper(s))
-	if s == "" {
-		return 0, fmt.Errorf("empty size string")
-	}
-
-	// Find where the number ends and the unit begins
-	var numStr string
-	var unit string
-	for i, c := range s {
-		if c < '0' || c > '9' {
-			numStr = s[:i]
-			unit = s[i:]
-			break
-		}
-	}
-	if numStr == "" {
-		numStr = s
-	}
-
-	num, err := strconv.ParseInt(numStr, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid size number: %s", numStr)
-	}
-
-	// Convert to MB (lumberjack uses MB)
-	switch unit {
-	case "", "MB", "M":
-		return int(num), nil
-	case "KB", "K":
-		// Round up to at least 1 MB
-		mb := num / 1024
-		if mb < 1 {
-			mb = 1
-		}
-		return int(mb), nil
-	case "GB", "G":
-		return int(num * 1024), nil
-	default:
-		return 0, fmt.Errorf("unknown size unit: %s (use KB, MB, or GB)", unit)
-	}
 }

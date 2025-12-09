@@ -12,7 +12,7 @@ import (
 )
 
 func TestNDJSONWriter_Write(t *testing.T) {
-	t.Run("writes log entry with type field", func(t *testing.T) {
+	t.Run("writes log entry with type field and schemaVersion", func(t *testing.T) {
 		var buf bytes.Buffer
 		w := NewNDJSONWriter(&buf)
 
@@ -35,6 +35,7 @@ func TestNDJSONWriter_Write(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "log", out.Type)
+		assert.Equal(t, SchemaVersion, out.SchemaVersion)
 		assert.Equal(t, "Error", out.Level)
 		assert.Equal(t, "TestApp", out.Process)
 		assert.Equal(t, 1234, out.PID)
@@ -77,6 +78,7 @@ func TestNDJSONWriter_WriteInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "info", out.Type)
+	assert.Equal(t, SchemaVersion, out.SchemaVersion)
 	assert.Equal(t, "Test message", out.Message)
 	assert.Equal(t, "iPhone 15", out.Simulator)
 	assert.Equal(t, "ABC123", out.UDID)
@@ -96,6 +98,7 @@ func TestNDJSONWriter_WriteWarning(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "warning", out.Type)
+	assert.Equal(t, SchemaVersion, out.SchemaVersion)
 	assert.Equal(t, "Something went wrong", out.Message)
 }
 
@@ -111,6 +114,7 @@ func TestNDJSONWriter_WriteTmux(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "tmux", out.Type)
+	assert.Equal(t, SchemaVersion, out.SchemaVersion)
 	assert.Equal(t, "xcw-iphone-15", out.Session)
 	assert.Equal(t, "tmux attach -t xcw-iphone-15", out.Attach)
 }
@@ -127,6 +131,7 @@ func TestNDJSONWriter_WriteTrigger(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "trigger", out.Type)
+	assert.Equal(t, SchemaVersion, out.SchemaVersion)
 	assert.Equal(t, "error", out.Trigger)
 	assert.Equal(t, "notify.sh", out.Command)
 	assert.Equal(t, "Connection timeout", out.Message)
@@ -144,6 +149,7 @@ func TestNDJSONWriter_WriteTriggerError(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "trigger_error", out.Type)
+	assert.Equal(t, SchemaVersion, out.SchemaVersion)
 	assert.Equal(t, "notify.sh", out.Command)
 	assert.Equal(t, "exit status 1", out.Error)
 }
@@ -160,6 +166,7 @@ func TestNDJSONWriter_WriteError(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "error", out.Type)
+	assert.Equal(t, SchemaVersion, out.SchemaVersion)
 	assert.Equal(t, "DEVICE_NOT_FOUND", out.Code)
 	assert.Equal(t, "No simulator found", out.Message)
 }
@@ -170,6 +177,7 @@ func TestNDJSONWriter_WriteHeartbeat(t *testing.T) {
 
 	h := &Heartbeat{
 		Type:          "heartbeat",
+		SchemaVersion: SchemaVersion,
 		Timestamp:     "2024-01-15T10:30:45Z",
 		UptimeSeconds: 300,
 		LogsSinceLast: 42,
@@ -183,6 +191,7 @@ func TestNDJSONWriter_WriteHeartbeat(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "heartbeat", out.Type)
+	assert.Equal(t, SchemaVersion, out.SchemaVersion)
 	assert.Equal(t, int64(300), out.UptimeSeconds)
 	assert.Equal(t, 42, out.LogsSinceLast)
 }

@@ -24,19 +24,21 @@ func NewNDJSONWriter(w io.Writer) *NDJSONWriter {
 
 // OutputEntry is the simplified NDJSON output format
 type OutputEntry struct {
-	Type      string `json:"type"` // Always "log"
-	Timestamp string `json:"timestamp"`
-	Level     string `json:"level"`
-	Process   string `json:"process"`
-	PID       int    `json:"pid"`
-	Subsystem string `json:"subsystem,omitempty"`
-	Category  string `json:"category,omitempty"`
-	Message   string `json:"message"`
+	Type          string `json:"type"`          // Always "log"
+	SchemaVersion int    `json:"schemaVersion"` // Schema version for compatibility
+	Timestamp     string `json:"timestamp"`
+	Level         string `json:"level"`
+	Process       string `json:"process"`
+	PID           int    `json:"pid"`
+	Subsystem     string `json:"subsystem,omitempty"`
+	Category      string `json:"category,omitempty"`
+	Message       string `json:"message"`
 }
 
 // Heartbeat is a keepalive message for AI agents
 type Heartbeat struct {
 	Type          string `json:"type"`
+	SchemaVersion int    `json:"schemaVersion"`
 	Timestamp     string `json:"timestamp"`
 	UptimeSeconds int64  `json:"uptime_seconds"`
 	LogsSinceLast int    `json:"logs_since_last"`
@@ -44,65 +46,74 @@ type Heartbeat struct {
 
 // InfoOutput represents an informational message
 type InfoOutput struct {
-	Type      string `json:"type"` // Always "info"
-	Message   string `json:"message"`
-	Simulator string `json:"simulator,omitempty"`
-	UDID      string `json:"udid,omitempty"`
-	Since     string `json:"since,omitempty"`
-	Mode      string `json:"mode,omitempty"`
+	Type          string `json:"type"` // Always "info"
+	SchemaVersion int    `json:"schemaVersion"`
+	Message       string `json:"message"`
+	Simulator     string `json:"simulator,omitempty"`
+	UDID          string `json:"udid,omitempty"`
+	Since         string `json:"since,omitempty"`
+	Mode          string `json:"mode,omitempty"`
 }
 
 // WarningOutput represents a warning message
 type WarningOutput struct {
-	Type    string `json:"type"` // Always "warning"
-	Message string `json:"message"`
+	Type          string `json:"type"` // Always "warning"
+	SchemaVersion int    `json:"schemaVersion"`
+	Message       string `json:"message"`
 }
 
 // TmuxOutput represents tmux session information
 type TmuxOutput struct {
-	Type    string `json:"type"` // Always "tmux"
-	Session string `json:"session"`
-	Attach  string `json:"attach"`
+	Type          string `json:"type"` // Always "tmux"
+	SchemaVersion int    `json:"schemaVersion"`
+	Session       string `json:"session"`
+	Attach        string `json:"attach"`
 }
 
 // TriggerOutput represents a trigger event
 type TriggerOutput struct {
-	Type    string `json:"type"` // Always "trigger"
-	Trigger string `json:"trigger"`
-	Command string `json:"command"`
-	Message string `json:"message"`
+	Type          string `json:"type"` // Always "trigger"
+	SchemaVersion int    `json:"schemaVersion"`
+	Trigger       string `json:"trigger"`
+	Command       string `json:"command"`
+	Message       string `json:"message"`
 }
 
 // TriggerErrorOutput represents a trigger execution error
 type TriggerErrorOutput struct {
-	Type    string `json:"type"` // Always "trigger_error"
-	Command string `json:"command"`
-	Error   string `json:"error"`
+	Type          string `json:"type"` // Always "trigger_error"
+	SchemaVersion int    `json:"schemaVersion"`
+	Command       string `json:"command"`
+	Error         string `json:"error"`
 }
 
 // Write outputs a single log entry as NDJSON
 func (w *NDJSONWriter) Write(entry *domain.LogEntry) error {
 	out := OutputEntry{
-		Type:      "log",
-		Timestamp: entry.Timestamp.Format(time.RFC3339Nano),
-		Level:     string(entry.Level),
-		Process:   entry.Process,
-		PID:       entry.PID,
-		Subsystem: entry.Subsystem,
-		Category:  entry.Category,
-		Message:   entry.Message,
+		Type:          "log",
+		SchemaVersion: SchemaVersion,
+		Timestamp:     entry.Timestamp.Format(time.RFC3339Nano),
+		Level:         string(entry.Level),
+		Process:       entry.Process,
+		PID:           entry.PID,
+		Subsystem:     entry.Subsystem,
+		Category:      entry.Category,
+		Message:       entry.Message,
 	}
 	return w.encoder.Encode(out)
 }
 
 // WriteSummary outputs a summary marker
 func (w *NDJSONWriter) WriteSummary(summary *domain.LogSummary) error {
+	summary.SchemaVersion = SchemaVersion
 	return w.encoder.Encode(summary)
 }
 
 // WriteError outputs an error
 func (w *NDJSONWriter) WriteError(code, message string) error {
-	return w.encoder.Encode(domain.NewErrorOutput(code, message))
+	err := domain.NewErrorOutput(code, message)
+	err.SchemaVersion = SchemaVersion
+	return w.encoder.Encode(err)
 }
 
 // WriteRaw outputs raw JSON data
@@ -118,48 +129,53 @@ func (w *NDJSONWriter) WriteHeartbeat(h *Heartbeat) error {
 // WriteInfo outputs an informational message
 func (w *NDJSONWriter) WriteInfo(message, simulator, udid, since, mode string) error {
 	return w.encoder.Encode(&InfoOutput{
-		Type:      "info",
-		Message:   message,
-		Simulator: simulator,
-		UDID:      udid,
-		Since:     since,
-		Mode:      mode,
+		Type:          "info",
+		SchemaVersion: SchemaVersion,
+		Message:       message,
+		Simulator:     simulator,
+		UDID:          udid,
+		Since:         since,
+		Mode:          mode,
 	})
 }
 
 // WriteWarning outputs a warning message
 func (w *NDJSONWriter) WriteWarning(message string) error {
 	return w.encoder.Encode(&WarningOutput{
-		Type:    "warning",
-		Message: message,
+		Type:          "warning",
+		SchemaVersion: SchemaVersion,
+		Message:       message,
 	})
 }
 
 // WriteTmux outputs tmux session information
 func (w *NDJSONWriter) WriteTmux(session, attach string) error {
 	return w.encoder.Encode(&TmuxOutput{
-		Type:    "tmux",
-		Session: session,
-		Attach:  attach,
+		Type:          "tmux",
+		SchemaVersion: SchemaVersion,
+		Session:       session,
+		Attach:        attach,
 	})
 }
 
 // WriteTrigger outputs a trigger event
 func (w *NDJSONWriter) WriteTrigger(trigger, command, message string) error {
 	return w.encoder.Encode(&TriggerOutput{
-		Type:    "trigger",
-		Trigger: trigger,
-		Command: command,
-		Message: message,
+		Type:          "trigger",
+		SchemaVersion: SchemaVersion,
+		Trigger:       trigger,
+		Command:       command,
+		Message:       message,
 	})
 }
 
 // WriteTriggerError outputs a trigger execution error
 func (w *NDJSONWriter) WriteTriggerError(command, errMsg string) error {
 	return w.encoder.Encode(&TriggerErrorOutput{
-		Type:    "trigger_error",
-		Command: command,
-		Error:   errMsg,
+		Type:          "trigger_error",
+		SchemaVersion: SchemaVersion,
+		Command:       command,
+		Error:         errMsg,
 	})
 }
 

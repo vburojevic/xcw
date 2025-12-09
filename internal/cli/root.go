@@ -34,6 +34,7 @@ type CLI struct {
 	Doctor     DoctorCmd     `cmd:"" help:"Check system requirements and configuration"`
 	Completion CompletionCmd `cmd:"" help:"Generate shell completions"`
 	UI         UICmd         `cmd:"" help:"Interactive TUI log viewer"`
+	Sessions   SessionsCmd   `cmd:"" help:"Manage session log files"`
 }
 
 // Globals holds shared state for all commands

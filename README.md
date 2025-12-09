@@ -12,7 +12,7 @@ A Go CLI for tailing and watching Xcode iOS Simulator console logs, optimized fo
 - **Tmux Integration**: Persistent sessions for background log watching
 - **Auto-Reconnection**: Automatically reconnects if simulator restarts
 - **Auto-Boot**: Optionally boots simulator if not running
-- **File Output with Rotation**: Log to file with automatic rotation
+- **Session-Based File Output**: Per-session timestamped log files
 - **Record/Replay**: Capture logs and replay them for analysis
 - **Pattern Persistence**: Track known vs new error patterns across sessions
 - **System Diagnostics**: Built-in doctor command to verify setup
@@ -85,8 +85,11 @@ xcw tail -a com.example.myapp --heartbeat 10s
 # Output to tmux session
 xcw tail -a com.example.myapp --tmux
 
-# Output to file with rotation
-xcw tail -a com.example.myapp --output logs.ndjson --rotate-size 10MB --rotate-count 5
+# Output to session file (auto-timestamped)
+xcw tail -a com.example.myapp --session-dir ~/.xcw/sessions
+
+# Output to explicit file
+xcw tail -a com.example.myapp --output logs.ndjson
 
 # Filter by log level range
 xcw tail -a com.example.myapp --min-level info --max-level error
@@ -202,9 +205,9 @@ FLAGS:
       --heartbeat=STRING   Emit periodic heartbeat messages (e.g., '10s')
       --tmux               Output to tmux session
       --session=STRING     Custom tmux session name
-      --output=FILE        Write to file instead of stdout
-      --rotate-size=SIZE   Max file size before rotation (e.g., '10MB')
-      --rotate-count=INT   Number of rotated files to keep
+      --output=FILE        Write to explicit file path
+      --session-dir=PATH   Directory for session files (default: ~/.xcw/sessions)
+      --session-prefix=STR Prefix for session filename (default: app bundle ID)
 ```
 
 **Simulator Selection Behavior:**
@@ -263,6 +266,9 @@ FLAGS:
       --on-fault=STRING    Command to run when fault-level log detected
       --on-pattern=STRING  Pattern:command pairs (repeatable)
       --cooldown=DURATION  Minimum time between triggers (default: 5s)
+      --output=FILE        Write logs to explicit file path
+      --session-dir=PATH   Directory for session files
+      --session-prefix=STR Prefix for session filename
 ```
 
 ### `xcw summary`
@@ -426,6 +432,51 @@ For release notes, see:
   https://github.com/vburojevic/xcw/releases
 ```
 
+### `xcw sessions`
+
+Manage session log files.
+
+```
+COMMANDS:
+  list     List session files (default)
+  show     Show path to a session file
+  clean    Delete old session files
+
+LIST FLAGS:
+      --dir=PATH           Session directory (default: ~/.xcw/sessions)
+      --limit=INT          Max sessions to show (default: 20)
+
+SHOW FLAGS:
+      --index=INT          Session index from list (1-based)
+      --latest             Show most recent session
+
+CLEAN FLAGS:
+      --keep=INT           Number of sessions to keep (default: 10)
+      --dry-run            Show what would be deleted without deleting
+```
+
+**Session File Naming:**
+
+Files are named with timestamp and prefix: `YYYYMMDD-HHMMSS-prefix.ndjson`
+
+Example: `20251209-153045-com.example.myapp.ndjson`
+
+**Example AI Agent Workflow:**
+
+```bash
+# Start session (auto-generates timestamped file)
+xcw tail -a com.example.myapp --session-dir ~/.xcw/sessions
+
+# List recent sessions
+xcw sessions list
+
+# Get path to latest session (for piping)
+xcw analyze $(xcw sessions show --latest)
+
+# Clean old sessions, keep 5 most recent
+xcw sessions clean --keep 5
+```
+
 ## Global Flags
 
 ```
@@ -465,7 +516,7 @@ xcw schema --type log,error,summary
 # schemas/v1/xcw-schema.json
 ```
 
-Schema includes all output types: `log`, `summary`, `heartbeat`, `error`, `tmux`, `info`, `warning`, `trigger`, `doctor`, `app`, `pick`, `analysis`, `trigger_error`.
+Schema includes all output types: `log`, `summary`, `heartbeat`, `error`, `tmux`, `info`, `warning`, `trigger`, `doctor`, `app`, `pick`, `session`, `analysis`, `trigger_error`.
 
 ### NDJSON Output Types Reference
 
@@ -486,6 +537,7 @@ All outputs include `type` and `schemaVersion` fields. Current schema version is
 | `app` | Installed app info | `bundle_id`, `name`, `app_type`, `version` |
 | `doctor` | System diagnostic report | `checks[]`, `all_passed`, `error_count`, `warn_count` |
 | `pick` | Interactive selection result | `picked`, `name`, `udid` or `bundle_id` |
+| `session` | Session file info | `path`, `name`, `timestamp`, `size`, `prefix` |
 
 **Log Levels:** `Debug` < `Info` < `Default` < `Error` < `Fault`
 
@@ -504,7 +556,6 @@ All errors are output as NDJSON with `type: "error"`, a machine-readable `code`,
 | `INVALID_UNTIL` | Until time parsing fails |
 | `INVALID_INTERVAL` | Summary interval invalid |
 | `INVALID_HEARTBEAT` | Heartbeat interval invalid |
-| `INVALID_ROTATE_SIZE` | File rotation size invalid |
 | `INVALID_COOLDOWN` | Watch cooldown invalid |
 | `INVALID_TRIGGER` | Trigger format invalid (missing colon) |
 | `INVALID_TRIGGER_PATTERN` | Trigger regex compilation fails |
@@ -514,12 +565,19 @@ All errors are output as NDJSON with `type: "error"`, a machine-readable `code`,
 | `LIST_FAILED` | Device listing failed |
 | `LIST_APPS_FAILED` | App listing failed |
 | `FILE_NOT_FOUND` | Input file not found |
+| `FILE_CREATE_ERROR` | Failed to create output file |
 | `READ_ERROR` | File read error |
 | `NO_ENTRIES` | No valid log entries in file |
 | `DEVICE_NOT_BOOTED` | Device must be booted for operation |
 | `TMUX_NOT_INSTALLED` | tmux not installed |
 | `TMUX_ERROR` | tmux operation failed |
 | `SESSION_NOT_FOUND` | tmux session not found |
+| `SESSION_DIR_ERROR` | Failed to create/access session directory |
+| `SESSION_ERROR` | Session file operation failed |
+| `LIST_SESSIONS_ERROR` | Failed to list session files |
+| `INVALID_INDEX` | Session index out of range |
+| `NO_SESSIONS` | No session files found |
+| `CLEAN_ERROR` | Failed to clean old sessions |
 | `CLEAR_FAILED` | Clear tmux pane failed |
 | `NOT_INTERACTIVE` | Terminal not interactive (required for `pick`) |
 | `NO_SIMULATORS` | No simulators available |
