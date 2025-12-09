@@ -8,7 +8,7 @@ import (
 
 // SchemaCmd outputs JSON Schema for xcw output types
 type SchemaCmd struct {
-	Type []string `short:"t" help:"Output types to include (log,summary,heartbeat,error,tmux). Default: all"`
+	Type []string `short:"t" help:"Output types to include (log,summary,heartbeat,error,tmux,info,warning,trigger,doctor,app). Default: all"`
 }
 
 // Run executes the schema command
@@ -19,12 +19,17 @@ func (c *SchemaCmd) Run(globals *Globals) error {
 		"heartbeat": heartbeatSchema(),
 		"error":     errorSchema(),
 		"tmux":      tmuxSchema(),
+		"info":      infoSchema(),
+		"warning":   warningSchema(),
+		"trigger":   triggerSchema(),
+		"doctor":    doctorSchema(),
+		"app":       appSchema(),
 	}
 
 	// Determine which schemas to output
 	typesToOutput := c.Type
 	if len(typesToOutput) == 0 {
-		typesToOutput = []string{"log", "summary", "heartbeat", "error", "tmux"}
+		typesToOutput = []string{"log", "summary", "heartbeat", "error", "tmux", "info", "warning", "trigger", "doctor", "app"}
 	}
 
 	// Build output
@@ -236,6 +241,178 @@ func tmuxSchema() map[string]interface{} {
 	}
 }
 
+func infoSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "object",
+		"title":       "Info Message",
+		"description": "Informational message from xcw",
+		"properties": map[string]interface{}{
+			"type": map[string]interface{}{
+				"type":  "string",
+				"const": "info",
+			},
+			"message": map[string]interface{}{
+				"type":        "string",
+				"description": "Info message content",
+			},
+			"device": map[string]interface{}{
+				"type":        "string",
+				"description": "Device name if applicable",
+			},
+			"udid": map[string]interface{}{
+				"type":        "string",
+				"description": "Device UDID if applicable",
+			},
+		},
+		"required": []string{"type", "message"},
+	}
+}
+
+func warningSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "object",
+		"title":       "Warning Message",
+		"description": "Warning message from xcw",
+		"properties": map[string]interface{}{
+			"type": map[string]interface{}{
+				"type":  "string",
+				"const": "warning",
+			},
+			"message": map[string]interface{}{
+				"type":        "string",
+				"description": "Warning message content",
+			},
+		},
+		"required": []string{"type", "message"},
+	}
+}
+
+func triggerSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "object",
+		"title":       "Trigger Event",
+		"description": "Notification when a trigger fires",
+		"properties": map[string]interface{}{
+			"type": map[string]interface{}{
+				"type":  "string",
+				"const": "trigger",
+			},
+			"trigger_type": map[string]interface{}{
+				"type":        "string",
+				"description": "Type of trigger (error, fault, or pattern:regex)",
+			},
+			"command": map[string]interface{}{
+				"type":        "string",
+				"description": "Command being executed",
+			},
+			"match": map[string]interface{}{
+				"type":        "string",
+				"description": "Log message that triggered the action",
+			},
+		},
+		"required": []string{"type", "trigger_type", "command"},
+	}
+}
+
+func doctorSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "object",
+		"title":       "Doctor Report",
+		"description": "System diagnostic report from xcw doctor",
+		"properties": map[string]interface{}{
+			"type": map[string]interface{}{
+				"type":  "string",
+				"const": "doctor",
+			},
+			"timestamp": map[string]interface{}{
+				"type":        "string",
+				"format":      "date-time",
+				"description": "When the check was performed",
+			},
+			"checks": map[string]interface{}{
+				"type":        "array",
+				"description": "Individual check results",
+				"items": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"name": map[string]interface{}{
+							"type":        "string",
+							"description": "Name of the check",
+						},
+						"status": map[string]interface{}{
+							"type":        "string",
+							"enum":        []string{"ok", "warning", "error"},
+							"description": "Check result status",
+						},
+						"message": map[string]interface{}{
+							"type":        "string",
+							"description": "Result message",
+						},
+						"details": map[string]interface{}{
+							"type":        "string",
+							"description": "Additional details or remediation steps",
+						},
+					},
+					"required": []string{"name", "status"},
+				},
+			},
+			"all_passed": map[string]interface{}{
+				"type":        "boolean",
+				"description": "True if all checks passed without errors",
+			},
+			"error_count": map[string]interface{}{
+				"type":        "integer",
+				"description": "Number of checks with error status",
+			},
+			"warn_count": map[string]interface{}{
+				"type":        "integer",
+				"description": "Number of checks with warning status",
+			},
+		},
+		"required": []string{"type", "timestamp", "checks", "all_passed"},
+	}
+}
+
+func appSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "object",
+		"title":       "Installed App",
+		"description": "Information about an installed app on the simulator",
+		"properties": map[string]interface{}{
+			"type": map[string]interface{}{
+				"type":  "string",
+				"const": "app",
+			},
+			"bundle_id": map[string]interface{}{
+				"type":        "string",
+				"description": "App bundle identifier",
+			},
+			"name": map[string]interface{}{
+				"type":        "string",
+				"description": "App display name",
+			},
+			"version": map[string]interface{}{
+				"type":        "string",
+				"description": "App version string",
+			},
+			"build_number": map[string]interface{}{
+				"type":        "string",
+				"description": "App build number",
+			},
+			"app_type": map[string]interface{}{
+				"type":        "string",
+				"enum":        []string{"user", "system"},
+				"description": "Whether app is user-installed or system",
+			},
+			"path": map[string]interface{}{
+				"type":        "string",
+				"description": "Path to app bundle",
+			},
+		},
+		"required": []string{"type", "bundle_id", "name", "app_type"},
+	}
+}
+
 // Helper to output a quick reference
 func (c *SchemaCmd) outputTextHelp(globals *Globals) {
 	fmt.Fprintln(globals.Stdout, "XcodeConsoleWatcher Output Types:")
@@ -245,6 +422,11 @@ func (c *SchemaCmd) outputTextHelp(globals *Globals) {
 	fmt.Fprintln(globals.Stdout, "  heartbeat - Keepalive message")
 	fmt.Fprintln(globals.Stdout, "  error     - Error from xcw")
 	fmt.Fprintln(globals.Stdout, "  tmux      - Tmux session info")
+	fmt.Fprintln(globals.Stdout, "  info      - Informational message")
+	fmt.Fprintln(globals.Stdout, "  warning   - Warning message")
+	fmt.Fprintln(globals.Stdout, "  trigger   - Trigger event notification")
+	fmt.Fprintln(globals.Stdout, "  doctor    - System diagnostic report")
+	fmt.Fprintln(globals.Stdout, "  app       - Installed app info")
 	fmt.Fprintln(globals.Stdout, "")
 	fmt.Fprintln(globals.Stdout, "Use --type to filter: xcw schema --type log,error")
 }

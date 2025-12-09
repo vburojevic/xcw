@@ -15,15 +15,16 @@ import (
 
 // StreamOptions configures log streaming behavior
 type StreamOptions struct {
-	BundleID          string         // Filter by app bundle identifier
-	Subsystems        []string       // Filter by subsystems
-	Categories        []string       // Filter by categories
-	MinLevel          domain.LogLevel // Minimum log level
-	Pattern           *regexp.Regexp // Regex pattern for message filtering
-	ExcludePattern    *regexp.Regexp // Regex pattern to exclude from messages
-	ExcludeSubsystems []string       // Subsystems to exclude
-	BufferSize        int            // Ring buffer size
-	RawPredicate      string         // Raw NSPredicate string (overrides other filters)
+	BundleID          string          // Filter by app bundle identifier
+	Subsystems        []string        // Filter by subsystems
+	Categories        []string        // Filter by categories
+	MinLevel          domain.LogLevel // Minimum log level (inclusive)
+	MaxLevel          domain.LogLevel // Maximum log level (inclusive, empty = no max)
+	Pattern           *regexp.Regexp  // Regex pattern for message filtering
+	ExcludePattern    *regexp.Regexp  // Regex pattern to exclude from messages
+	ExcludeSubsystems []string        // Subsystems to exclude
+	BufferSize        int             // Ring buffer size
+	RawPredicate      string          // Raw NSPredicate string (overrides other filters)
 }
 
 // Streamer handles real-time log streaming from a simulator
@@ -209,8 +210,13 @@ func (s *Streamer) runLogStream(ctx context.Context) error {
 			continue // Skip non-log events
 		}
 
-		// Apply level filter
+		// Apply level filter (min)
 		if entry.Level.Priority() < s.opts.MinLevel.Priority() {
+			continue
+		}
+
+		// Apply level filter (max) - only if MaxLevel is set
+		if s.opts.MaxLevel != "" && entry.Level.Priority() > s.opts.MaxLevel.Priority() {
 			continue
 		}
 

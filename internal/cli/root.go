@@ -24,8 +24,12 @@ type CLI struct {
 	Summary    SummaryCmd    `cmd:"" help:"Output summary of recent logs"`
 	Watch      WatchCmd      `cmd:"" help:"Watch logs and trigger commands on patterns"`
 	Clear      ClearCmd      `cmd:"" help:"Clear tmux session content"`
+	Apps       AppsCmd       `cmd:"" help:"List installed apps on a simulator"`
+	Analyze    AnalyzeCmd    `cmd:"" help:"Analyze a recorded NDJSON log file"`
+	Replay     ReplayCmd     `cmd:"" help:"Replay a recorded NDJSON log file"`
 	Schema     SchemaCmd     `cmd:"" help:"Output JSON Schema for xcw output types"`
 	Config     ConfigCmd     `cmd:"" help:"Show or manage configuration"`
+	Doctor     DoctorCmd     `cmd:"" help:"Check system requirements and configuration"`
 	Completion CompletionCmd `cmd:"" help:"Generate shell completions"`
 	UI         UICmd         `cmd:"" help:"Interactive TUI log viewer"`
 }

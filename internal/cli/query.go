@@ -14,19 +14,23 @@ import (
 
 // QueryCmd queries historical logs from a simulator
 type QueryCmd struct {
-	Simulator        string   `short:"s" help:"Simulator name or UDID"`
-	Booted           bool     `short:"b" help:"Use booted simulator (error if multiple)"`
-	App              string   `short:"a" required:"" help:"App bundle identifier to filter logs"`
-	Since            string   `default:"5m" help:"How far back to query (e.g., '5m', '1h', '30s')"`
-	Until            string   `help:"End time for query (RFC3339 or relative like '1m')"`
-	Pattern          string   `short:"p" help:"Regex pattern to filter log messages"`
-	Exclude          string   `short:"x" help:"Regex pattern to exclude from log messages"`
+	Simulator       string   `short:"s" help:"Simulator name or UDID"`
+	Booted          bool     `short:"b" help:"Use booted simulator (error if multiple)"`
+	App             string   `short:"a" required:"" help:"App bundle identifier to filter logs"`
+	Since           string   `default:"5m" help:"How far back to query (e.g., '5m', '1h', '30s')"`
+	Until           string   `help:"End time for query (RFC3339 or relative like '1m')"`
+	Pattern         string   `short:"p" help:"Regex pattern to filter log messages"`
+	Exclude         string   `short:"x" help:"Regex pattern to exclude from log messages"`
 	ExcludeSubsystem []string `help:"Exclude logs from subsystem (can be repeated, supports * wildcard)"`
-	Limit            int      `default:"1000" help:"Maximum number of logs to return"`
-	Subsystem        []string `help:"Filter by subsystem (can be repeated)"`
-	Category         []string `help:"Filter by category (can be repeated)"`
-	Predicate        string   `help:"Raw NSPredicate filter (overrides --app, --subsystem, --category)"`
-	Analyze          bool     `help:"Include AI-friendly analysis summary"`
+	Limit           int      `default:"1000" help:"Maximum number of logs to return"`
+	Subsystem       []string `help:"Filter by subsystem (can be repeated)"`
+	Category        []string `help:"Filter by category (can be repeated)"`
+	MinLevel        string   `help:"Minimum log level: debug, info, default, error, fault (overrides global --level)"`
+	MaxLevel        string   `help:"Maximum log level: debug, info, default, error, fault"`
+	Predicate       string   `help:"Raw NSPredicate filter (overrides --app, --subsystem, --category)"`
+	Analyze         bool     `help:"Include AI-friendly analysis summary"`
+	PersistPatterns bool     `help:"Save detected patterns for future reference (marks new vs known)"`
+	PatternFile     string   `help:"Custom pattern file path (default: ~/.xcw/patterns.json)"`
 }
 
 // Run executes the query command
@@ -101,13 +105,20 @@ func (c *QueryCmd) Run(globals *Globals) error {
 		}
 	}
 
+	// Determine log level (command-specific overrides global)
+	minLevel := globals.Level
+	if c.MinLevel != "" {
+		minLevel = c.MinLevel
+	}
+
 	// Create query reader
 	reader := simulator.NewQueryReader()
 	opts := simulator.QueryOptions{
 		BundleID:          c.App,
 		Subsystems:        c.Subsystem,
 		Categories:        c.Category,
-		MinLevel:          domain.ParseLogLevel(globals.Level),
+		MinLevel:          domain.ParseLogLevel(minLevel),
+		MaxLevel:          domain.ParseLogLevel(c.MaxLevel),
 		Pattern:           pattern,
 		ExcludePattern:    excludePattern,
 		ExcludeSubsystems: c.ExcludeSubsystem,
@@ -142,9 +153,23 @@ func (c *QueryCmd) Run(globals *Globals) error {
 			analyzer := output.NewAnalyzer()
 			summary := analyzer.Summarize(entries)
 			patterns := analyzer.DetectPatterns(entries)
-			analysisOutput := output.NewSummaryOutput(summary, patterns)
-			if err := writer.WriteRaw(analysisOutput); err != nil {
-				return err
+
+			if c.PersistPatterns {
+				// Use pattern store for enhanced analysis
+				store := output.NewPatternStore(c.PatternFile)
+				enhanced := store.RecordPatterns(patterns)
+				if err := store.Save(); err != nil {
+					globals.Debug("Failed to save patterns: %v", err)
+				}
+				analysisOutput := output.NewEnhancedSummaryOutput(summary, enhanced)
+				if err := writer.WriteRaw(analysisOutput); err != nil {
+					return err
+				}
+			} else {
+				analysisOutput := output.NewSummaryOutput(summary, patterns)
+				if err := writer.WriteRaw(analysisOutput); err != nil {
+					return err
+				}
 			}
 		}
 	} else {
@@ -164,8 +189,25 @@ func (c *QueryCmd) Run(globals *Globals) error {
 		if c.Analyze {
 			analyzer := output.NewAnalyzer()
 			summary := analyzer.Summarize(entries)
+			patterns := analyzer.DetectPatterns(entries)
 			fmt.Fprintf(globals.Stdout, "Errors: %d, Faults: %d\n", summary.ErrorCount, summary.FaultCount)
-			if len(summary.TopErrors) > 0 {
+
+			if c.PersistPatterns && len(patterns) > 0 {
+				store := output.NewPatternStore(c.PatternFile)
+				enhanced := store.RecordPatterns(patterns)
+				if err := store.Save(); err != nil {
+					globals.Debug("Failed to save patterns: %v", err)
+				}
+
+				fmt.Fprintln(globals.Stdout, "\nError Patterns:")
+				for _, p := range enhanced {
+					status := "[NEW]"
+					if !p.IsNew {
+						status = "[KNOWN]"
+					}
+					fmt.Fprintf(globals.Stdout, "  %s %s (count: %d)\n", status, p.Pattern, p.Count)
+				}
+			} else if len(summary.TopErrors) > 0 {
 				fmt.Fprintln(globals.Stdout, "\nTop Errors:")
 				for _, e := range summary.TopErrors {
 					fmt.Fprintf(globals.Stdout, "  - %s\n", e)

@@ -27,6 +27,8 @@ type WatchCmd struct {
 	Pattern             string   `short:"p" help:"Regex pattern to filter log messages"`
 	Exclude             string   `short:"x" help:"Regex pattern to exclude from log messages"`
 	ExcludeSubsystem    []string `help:"Exclude logs from subsystem (can be repeated, supports * wildcard)"`
+	MinLevel            string   `help:"Minimum log level: debug, info, default, error, fault (overrides global --level)"`
+	MaxLevel            string   `help:"Maximum log level: debug, info, default, error, fault"`
 	Predicate           string   `help:"Raw NSPredicate filter (overrides --app)"`
 	OnError             string   `help:"Command to run when error-level log detected"`
 	OnFault             string   `help:"Command to run when fault-level log detected"`
@@ -183,11 +185,18 @@ func (c *WatchCmd) Run(globals *Globals) error {
 		}
 	}
 
+	// Determine log level (command-specific overrides global)
+	minLevel := globals.Level
+	if c.MinLevel != "" {
+		minLevel = c.MinLevel
+	}
+
 	// Create streamer
 	streamer := simulator.NewStreamer(mgr)
 	opts := simulator.StreamOptions{
 		BundleID:          c.App,
-		MinLevel:          domain.ParseLogLevel(globals.Level),
+		MinLevel:          domain.ParseLogLevel(minLevel),
+		MaxLevel:          domain.ParseLogLevel(c.MaxLevel),
 		Pattern:           pattern,
 		ExcludePattern:    excludePattern,
 		ExcludeSubsystems: c.ExcludeSubsystem,

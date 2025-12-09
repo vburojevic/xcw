@@ -9,8 +9,9 @@ import (
 
 // ConfigCmd shows or manages configuration
 type ConfigCmd struct {
-	Show ConfigShowCmd `cmd:"" default:"withargs" help:"Show current configuration"`
-	Path ConfigPathCmd `cmd:"" help:"Show configuration file path"`
+	Show     ConfigShowCmd     `cmd:"" default:"withargs" help:"Show current configuration"`
+	Path     ConfigPathCmd     `cmd:"" help:"Show configuration file path"`
+	Generate ConfigGenerateCmd `cmd:"" help:"Generate sample configuration file"`
 }
 
 // ConfigShowCmd shows current configuration
@@ -93,5 +94,71 @@ func (c *ConfigPathCmd) Run(globals *Globals) error {
 		fmt.Fprintf(globals.Stdout, "Config file: %s\n", path)
 	}
 
+	return nil
+}
+
+// ConfigGenerateCmd generates a sample configuration file
+type ConfigGenerateCmd struct{}
+
+// Run executes the config generate command
+func (c *ConfigGenerateCmd) Run(globals *Globals) error {
+	sampleConfig := `# xcw configuration file
+# Place this file at ~/.xcw.yaml, ~/.xcwrc, or ./xcw.yaml
+
+# Output format: "ndjson" (default) or "text"
+format: ndjson
+
+# Global log level filter: debug, info, default, error, fault
+level: default
+
+# Suppress non-log output (info messages, warnings)
+quiet: false
+
+# Enable verbose/debug output
+verbose: false
+
+# Default values for commands
+defaults:
+  # Default simulator selection: "booted" or a simulator name/UDID
+  simulator: booted
+
+  # Default app bundle identifier for filtering
+  # app: com.example.myapp
+
+  # Ring buffer size for tail command
+  buffer_size: 100
+
+  # Summary interval for tail --summary
+  # summary_interval: 30s
+
+  # Heartbeat interval for tail --heartbeat
+  # heartbeat: 10s
+
+  # Default time range for query command
+  since: 5m
+
+  # Maximum entries to return from query
+  limit: 1000
+
+  # Subsystems to include (empty = all)
+  # subsystems:
+  #   - com.example.myapp
+  #   - com.example.myapp.network
+
+  # Categories to include (empty = all)
+  # categories:
+  #   - network
+  #   - ui
+
+  # Subsystems to exclude (supports * wildcard)
+  # exclude_subsystems:
+  #   - com.apple.*
+  #   - libsystem_*
+
+  # Regex pattern to exclude from messages
+  # exclude_pattern: "heartbeat|keepalive"
+`
+
+	fmt.Fprint(globals.Stdout, sampleConfig)
 	return nil
 }

@@ -14,17 +14,18 @@ import (
 
 // QueryOptions configures historical log queries
 type QueryOptions struct {
-	BundleID          string         // Filter by app bundle identifier
-	Subsystems        []string       // Filter by subsystems
-	Categories        []string       // Filter by categories
-	MinLevel          domain.LogLevel // Minimum log level
-	Pattern           *regexp.Regexp // Regex pattern for message filtering
-	ExcludePattern    *regexp.Regexp // Regex pattern to exclude from messages
-	ExcludeSubsystems []string       // Subsystems to exclude
-	Since             time.Duration  // How far back to query
-	Until             time.Time      // End time (default: now)
-	Limit             int            // Max entries to return
-	RawPredicate      string         // Raw NSPredicate string (overrides other filters)
+	BundleID          string          // Filter by app bundle identifier
+	Subsystems        []string        // Filter by subsystems
+	Categories        []string        // Filter by categories
+	MinLevel          domain.LogLevel // Minimum log level (inclusive)
+	MaxLevel          domain.LogLevel // Maximum log level (inclusive, empty = no max)
+	Pattern           *regexp.Regexp  // Regex pattern for message filtering
+	ExcludePattern    *regexp.Regexp  // Regex pattern to exclude from messages
+	ExcludeSubsystems []string        // Subsystems to exclude
+	Since             time.Duration   // How far back to query
+	Until             time.Time       // End time (default: now)
+	Limit             int             // Max entries to return
+	RawPredicate      string          // Raw NSPredicate string (overrides other filters)
 }
 
 // QueryReader reads historical logs from a simulator
@@ -67,8 +68,13 @@ func (r *QueryReader) Query(ctx context.Context, udid string, opts QueryOptions)
 			continue
 		}
 
-		// Apply level filter
+		// Apply level filter (min)
 		if entry.Level.Priority() < opts.MinLevel.Priority() {
+			continue
+		}
+
+		// Apply level filter (max) - only if MaxLevel is set
+		if opts.MaxLevel != "" && entry.Level.Priority() > opts.MaxLevel.Priority() {
 			continue
 		}
 
