@@ -9,17 +9,21 @@ import (
 
 // Tracker monitors log entries for PID changes to detect app relaunches
 type Tracker struct {
-	mu             sync.Mutex
-	currentSession int
-	currentPID     int
-	sessionStart   time.Time
-	logCount       int
-	errorCount     int
-	faultCount     int
-	app            string
-	simulator      string
-	udid           string
-	initialized    bool
+	mu                sync.Mutex
+	currentSession    int
+	currentPID        int
+	currentBinaryUUID string
+	sessionStart      time.Time
+	logCount          int
+	errorCount        int
+	faultCount        int
+	app               string
+	simulator         string
+	udid              string
+	tailID            string
+	appVersion        string
+	appBuild          string
+	initialized       bool
 }
 
 // SessionChange contains events emitted when a session changes
@@ -29,11 +33,14 @@ type SessionChange struct {
 }
 
 // NewTracker creates a new session tracker
-func NewTracker(app, simulator, udid string) *Tracker {
+func NewTracker(app, simulator, udid, tailID, version, build string) *Tracker {
 	return &Tracker{
-		app:       app,
-		simulator: simulator,
-		udid:      udid,
+		app:        app,
+		simulator:  simulator,
+		udid:       udid,
+		tailID:     tailID,
+		appVersion: version,
+		appBuild:   build,
 	}
 }
 
@@ -52,25 +59,32 @@ func (t *Tracker) CheckEntry(entry *domain.LogEntry) *SessionChange {
 		t.initialized = true
 		t.currentSession = 1
 		t.currentPID = pid
+		t.currentBinaryUUID = entry.ProcessImageUUID
 		t.sessionStart = time.Now()
 		t.logCount = 1
 		t.updateCounts(entry)
 
 		// Return initial session start
 		return &SessionChange{
-			StartSession: domain.NewSessionStart(
+			StartSession: domain.NewSessionStartWithMeta(
 				t.currentSession,
 				pid,
 				0, // no previous PID
 				t.app,
 				t.simulator,
 				t.udid,
+				t.tailID,
+				t.appVersion,
+				t.appBuild,
+				entry.ProcessImageUUID,
+				"",
 			),
 		}
 	}
 
-	// PID changed - app was relaunched
-	if pid != t.currentPID && pid > 0 {
+	// PID or binary UUID changed - app was relaunched/reinstalled
+	binaryChanged := entry.ProcessImageUUID != "" && entry.ProcessImageUUID != t.currentBinaryUUID
+	if (pid != t.currentPID && pid > 0) || binaryChanged {
 		previousPID := t.currentPID
 		previousSession := t.currentSession
 
@@ -85,6 +99,7 @@ func (t *Tracker) CheckEntry(entry *domain.LogEntry) *SessionChange {
 		// Start new session
 		t.currentSession++
 		t.currentPID = pid
+		t.currentBinaryUUID = entry.ProcessImageUUID
 		t.sessionStart = time.Now()
 		t.logCount = 1
 		t.errorCount = 0
@@ -92,24 +107,29 @@ func (t *Tracker) CheckEntry(entry *domain.LogEntry) *SessionChange {
 		t.updateCounts(entry)
 
 		return &SessionChange{
-			EndSession: domain.NewSessionEnd(previousSession, previousPID, summary),
-			StartSession: domain.NewSessionStart(
+			EndSession: domain.NewSessionEndWithMeta(previousSession, previousPID, summary, t.tailID),
+			StartSession: domain.NewSessionStartWithMeta(
 				t.currentSession,
 				pid,
 				previousPID,
 				t.app,
 				t.simulator,
 				t.udid,
+				t.tailID,
+				t.appVersion,
+				t.appBuild,
+				entry.ProcessImageUUID,
+				"",
 			),
 		}
 	}
 
 	// Same session - just increment counts
 	t.logCount++
+	t.currentBinaryUUID = entry.ProcessImageUUID
 	t.updateCounts(entry)
 	return nil
 }
-
 
 // updateCounts updates error/fault counts based on log level
 func (t *Tracker) updateCounts(entry *domain.LogEntry) {
@@ -137,7 +157,7 @@ func (t *Tracker) GetFinalSummary() *domain.SessionEnd {
 		return nil
 	}
 
-	return domain.NewSessionEnd(
+	return domain.NewSessionEndWithMeta(
 		t.currentSession,
 		t.currentPID,
 		domain.SessionSummary{
@@ -146,7 +166,54 @@ func (t *Tracker) GetFinalSummary() *domain.SessionEnd {
 			Faults:          t.faultCount,
 			DurationSeconds: int(time.Since(t.sessionStart).Seconds()),
 		},
+		t.tailID,
 	)
+}
+
+// ForceRollover ends the current session and starts a new one using the same PID.
+// Useful for idle timeouts or manual boundaries.
+func (t *Tracker) ForceRollover(alert string) *SessionChange {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if !t.initialized {
+		return nil
+	}
+
+	previousSession := t.currentSession
+	previousPID := t.currentPID
+	prevBinary := t.currentBinaryUUID
+
+	summary := domain.SessionSummary{
+		TotalLogs:       t.logCount,
+		Errors:          t.errorCount,
+		Faults:          t.faultCount,
+		DurationSeconds: int(time.Since(t.sessionStart).Seconds()),
+	}
+
+	// Start new session with same PID; counters reset
+	t.currentSession++
+	t.sessionStart = time.Now()
+	t.logCount = 0
+	t.errorCount = 0
+	t.faultCount = 0
+
+	return &SessionChange{
+		EndSession: domain.NewSessionEndWithMeta(previousSession, previousPID, summary, t.tailID),
+		StartSession: domain.NewSessionStartWithMeta(
+			t.currentSession,
+			previousPID,
+			previousPID,
+			t.app,
+			t.simulator,
+			t.udid,
+			t.tailID,
+			t.appVersion,
+			t.appBuild,
+			prevBinary,
+			alert,
+		),
+	}
 }
 
 // Stats returns current session statistics

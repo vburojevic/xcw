@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/vburojevic/xcw/internal/domain"
+	"howett.net/plist"
 )
 
 // Manager handles simulator discovery and lifecycle operations
@@ -206,6 +209,41 @@ func (m *Manager) GetDeviceInfo(ctx context.Context, udid string) (*domain.Devic
 	}
 
 	return nil, fmt.Errorf("device not found: %s", udid)
+}
+
+// GetAppInfo returns version/build for an installed app (best-effort)
+func (m *Manager) GetAppInfo(ctx context.Context, udid, bundleID string) (version, build string, err error) {
+	if bundleID == "" {
+		return "", "", fmt.Errorf("bundle ID required")
+	}
+
+	// Get app container path
+	cmd := exec.CommandContext(ctx, m.xcrunPath, "simctl", "get_app_container", udid, bundleID, "--app")
+	containerPathBytes, err := cmd.Output()
+	if err != nil {
+		return "", "", fmt.Errorf("get_app_container failed: %w", err)
+	}
+
+	containerPath := strings.TrimSpace(string(containerPathBytes))
+	infoPlist := filepath.Join(containerPath, "Info.plist")
+
+	var data map[string]interface{}
+	raw, err := os.ReadFile(infoPlist)
+	if err != nil {
+		return "", "", fmt.Errorf("read Info.plist: %w", err)
+	}
+	if _, err := plist.Unmarshal(raw, &data); err != nil {
+		return "", "", fmt.Errorf("parse Info.plist: %w", err)
+	}
+
+	if v, ok := data["CFBundleShortVersionString"].(string); ok {
+		version = v
+	}
+	if b, ok := data["CFBundleVersion"].(string); ok {
+		build = b
+	}
+
+	return version, build, nil
 }
 
 // WaitForBoot waits for a device to finish booting

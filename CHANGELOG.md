@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2025-12-10
+
+### Added
+- `tail_id` added to all tail outputs (log, session_start/end, heartbeat, summary) so agents can correlate a single tail invocation.
+- New `--session-idle` flag to force session boundaries after periods of inactivity.
+- Session metadata now includes app version/build and binary UUID to detect reinstalls/hot-redeploys.
+- Per-session file rotation when using `--output` or `--session-dir` (one file per app run).
+
+### Changed
+- `xcw tail` now emits a final `session_end` when the stream stops, ensuring the last run is closed.
+
 ## [0.5.2] - 2024-12-09
 
 ### Changed

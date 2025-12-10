@@ -11,10 +11,10 @@ import (
 // CLI is the root command structure for XcodeConsoleWatcher
 type CLI struct {
 	// Global flags
-	Format  string `short:"f" default:"ndjson" enum:"ndjson,text" help:"Output format"`
-	Level   string `short:"l" default:"debug" enum:"debug,info,default,error,fault" help:"Minimum log level"`
-	Quiet   bool   `short:"q" help:"Suppress non-log output (only emit log entries)"`
-	Verbose bool   `short:"v" help:"Show debug output (predicates, reconnections, internal state)"`
+	Format  string     `short:"f" default:"ndjson" enum:"ndjson,text" help:"Output format"`
+	Level   string     `short:"l" default:"debug" enum:"debug,info,default,error,fault" help:"Minimum log level"`
+	Quiet   bool       `short:"q" help:"Suppress non-log output (only emit log entries)"`
+	Verbose bool       `short:"v" help:"Show debug output (predicates, reconnections, internal state)"`
 	Version VersionCmd `cmd:"" help:"Show version information"`
 	Update  UpdateCmd  `cmd:"" help:"Show how to upgrade xcw"`
 
@@ -114,6 +114,6 @@ func (v *VersionCmd) Run(globals *Globals) error {
 
 // Version information (set at build time)
 var (
-	Version = "dev"
+	Version = "0.8.0"
 	Commit  = "none"
 )

@@ -34,6 +34,7 @@ type OutputEntry struct {
 	Category      string `json:"category,omitempty"`
 	Message       string `json:"message"`
 	Session       int    `json:"session,omitempty"` // Session number (1, 2, 3...)
+	TailID        string `json:"tail_id,omitempty"` // Tail invocation ID
 }
 
 // Heartbeat is a keepalive message for AI agents
@@ -43,6 +44,7 @@ type Heartbeat struct {
 	Timestamp     string `json:"timestamp"`
 	UptimeSeconds int64  `json:"uptime_seconds"`
 	LogsSinceLast int    `json:"logs_since_last"`
+	TailID        string `json:"tail_id,omitempty"`
 }
 
 // InfoOutput represents an informational message
@@ -111,6 +113,7 @@ func (w *NDJSONWriter) Write(entry *domain.LogEntry) error {
 		Category:      entry.Category,
 		Message:       entry.Message,
 		Session:       entry.Session,
+		TailID:        entry.TailID,
 	}
 	return w.encoder.Encode(out)
 }

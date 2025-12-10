@@ -3,12 +3,16 @@ package cli
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"syscall"
 	"time"
 
@@ -46,12 +50,16 @@ type TailCmd struct {
 	Dedupe           bool     `help:"Collapse repeated identical messages"`
 	DedupeWindow     string   `help:"Time window for deduplication (e.g., '5s', '1m'). Without this, only consecutive duplicates are collapsed"`
 	Where            []string `short:"w" help:"Field filter (e.g., 'level=error', 'message~timeout'). Operators: =, !=, ~, !~, >=, <=, ^, $"`
+	SessionIdle      string   `help:"Emit session boundary after idle period with no logs (e.g., '60s')"`
 }
 
 // Run executes the tail command
 func (c *TailCmd) Run(globals *Globals) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Unique ID for this tail invocation (carried on all events)
+	tailID := generateTailID()
 
 	// Handle signals for graceful shutdown
 	sigCh := make(chan os.Signal, 1)
@@ -83,54 +91,97 @@ func (c *TailCmd) Run(globals *Globals) error {
 	}
 	globals.Debug("Found device: %s (UDID: %s, State: %s)", device.Name, device.UDID, device.State)
 
+	// Fetch app version/build for metadata (best-effort)
+	appVersion, appBuild := "", ""
+	if v, b, err := mgr.GetAppInfo(ctx, device.UDID, c.App); err == nil {
+		appVersion, appBuild = v, b
+		globals.Debug("App info: version=%s build=%s", appVersion, appBuild)
+	} else {
+		globals.Debug("App info unavailable: %v", err)
+	}
+
 	// Determine output destination
 	var outputWriter io.Writer = globals.Stdout
 	var tmuxMgr *tmux.Manager
 	var outputFile *os.File
 	var bufferedWriter *bufio.Writer
 
-	// Determine output file path
-	var outputPath string
+	// Determine output file path builder (supports per-session rotation)
+	var pathBuilder func(session int) (string, error)
 	if c.Output != "" {
-		// Explicit --output overrides session behavior
-		outputPath = c.Output
+		ext := filepath.Ext(c.Output)
+		base := strings.TrimSuffix(c.Output, ext)
+		if ext == "" {
+			ext = ".ndjson"
+		}
+		pathBuilder = func(session int) (string, error) {
+			return fmt.Sprintf("%s.session%d%s", base, session, ext), nil
+		}
 	} else if c.SessionDir != "" || c.SessionPrefix != "" {
-		// Session-based file output
 		prefix := c.SessionPrefix
 		if prefix == "" {
 			prefix = c.App
 		}
-		path, err := GenerateSessionPath(c.SessionDir, prefix)
+		pathBuilder = func(session int) (string, error) {
+			return GenerateSessionPath(c.SessionDir, prefix)
+		}
+	}
+
+	// Helper to open / rotate output file
+	openOutput := func(sessionNum int) error {
+		if pathBuilder == nil {
+			return nil
+		}
+
+		path, err := pathBuilder(sessionNum)
 		if err != nil {
 			return c.outputError(globals, "SESSION_DIR_ERROR", err.Error())
 		}
-		outputPath = path
-	}
 
-	// Create file output if path is set
-	if outputPath != "" {
-		var err error
-		outputFile, err = os.Create(outputPath)
+		// Close previous file
+		if bufferedWriter != nil {
+			bufferedWriter.Flush()
+		}
+		if outputFile != nil {
+			outputFile.Close()
+		}
+
+		outputFile, err = os.Create(path)
 		if err != nil {
 			return c.outputError(globals, "FILE_CREATE_ERROR", fmt.Sprintf("failed to create output file: %s", err))
 		}
-		defer outputFile.Close()
-
 		bufferedWriter = bufio.NewWriter(outputFile)
-		defer bufferedWriter.Flush()
-
 		outputWriter = bufferedWriter
-		globals.Debug("Writing to file: %s", outputPath)
 
 		if !globals.Quiet {
 			if globals.Format == "ndjson" {
 				output.NewNDJSONWriter(globals.Stdout).WriteInfo(
-					fmt.Sprintf("Writing logs to %s", outputPath),
+					fmt.Sprintf("Writing logs to %s", path),
 					device.Name, device.UDID, "", "")
 			} else {
-				fmt.Fprintf(globals.Stderr, "Writing logs to %s\n", outputPath)
+				fmt.Fprintf(globals.Stderr, "Writing logs to %s\n", path)
 			}
 		}
+		return nil
+	}
+
+	if !c.Tmux {
+		if err := openOutput(1); err != nil {
+			return err
+		}
+		if pathBuilder != nil {
+			defer func() {
+				if bufferedWriter != nil {
+					bufferedWriter.Flush()
+				}
+				if outputFile != nil {
+					outputFile.Close()
+				}
+			}()
+		}
+	} else {
+		// When tmux is on, skip file output to keep behavior consistent with previous versions
+		pathBuilder = nil
 	}
 
 	if c.Tmux {
@@ -284,11 +335,14 @@ func (c *TailCmd) Run(globals *Globals) error {
 		WriteHeartbeat(h *output.Heartbeat) error
 	}
 
-	if globals.Format == "ndjson" {
-		writer = output.NewNDJSONWriter(outputWriter)
-	} else {
-		writer = output.NewTextWriter(outputWriter)
+	setWriter := func(w io.Writer) {
+		if globals.Format == "ndjson" {
+			writer = output.NewNDJSONWriter(w)
+		} else {
+			writer = output.NewTextWriter(w)
+		}
 	}
+	setWriter(outputWriter)
 
 	// Parse summary interval
 	var summaryTicker *time.Ticker
@@ -316,6 +370,19 @@ func (c *TailCmd) Run(globals *Globals) error {
 	startTime := time.Now()
 	logsSinceLast := 0
 
+	// Parse idle timeout for session rollover
+	var idleTimer *time.Timer
+	var idleDuration time.Duration
+	if c.SessionIdle != "" {
+		var err error
+		idleDuration, err = time.ParseDuration(c.SessionIdle)
+		if err != nil {
+			return c.outputError(globals, "INVALID_SESSION_IDLE", fmt.Sprintf("invalid session idle duration: %s", err))
+		}
+		idleTimer = time.NewTimer(idleDuration)
+		defer idleTimer.Stop()
+	}
+
 	// Setup dedupe filter if enabled
 	var dedupeFilter *filter.DedupeFilter
 	if c.Dedupe {
@@ -342,7 +409,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 	}
 
 	// Create session tracker for detecting app relaunches
-	sessionTracker := session.NewTracker(c.App, device.Name, device.UDID)
+	sessionTracker := session.NewTracker(c.App, device.Name, device.UDID, tailID, appVersion, appBuild)
 	globals.Debug("Session tracking enabled")
 
 	// Process logs
@@ -350,10 +417,26 @@ func (c *TailCmd) Run(globals *Globals) error {
 		select {
 		case <-ctx.Done():
 			// Output final summary
-			c.outputSummary(writer, streamer)
+			c.outputSummary(writer, streamer, tailID)
+			if final := sessionTracker.GetFinalSummary(); final != nil {
+				if globals.Format == "ndjson" {
+					output.NewNDJSONWriter(outputWriter).WriteSessionEnd(final)
+				}
+			}
 			return nil
 
 		case entry := <-streamer.Logs():
+			// Reset idle timer on activity
+			if idleTimer != nil {
+				if !idleTimer.Stop() {
+					select {
+					case <-idleTimer.C:
+					default:
+					}
+				}
+				idleTimer.Reset(idleDuration)
+			}
+
 			// Check for session change (app relaunch)
 			if sessionChange := sessionTracker.CheckEntry(&entry); sessionChange != nil {
 				// Session changed - emit events
@@ -362,6 +445,14 @@ func (c *TailCmd) Run(globals *Globals) error {
 					if globals.Format == "ndjson" {
 						output.NewNDJSONWriter(outputWriter).WriteSessionEnd(sessionChange.EndSession)
 					}
+				}
+
+				// Rotate file per session when configured
+				if pathBuilder != nil && sessionChange.StartSession != nil {
+					if err := openOutput(sessionChange.StartSession.Session); err != nil {
+						return err
+					}
+					setWriter(outputWriter)
 				}
 
 				if sessionChange.StartSession != nil {
@@ -419,6 +510,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 
 			// Set session number on entry
 			entry.Session = sessionTracker.CurrentSession()
+			entry.TailID = tailID
 
 			if err := writer.Write(&entry); err != nil {
 				return err
@@ -440,7 +532,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 			}
 			return nil
 		}():
-			c.outputSummary(writer, streamer)
+			c.outputSummary(writer, streamer, tailID)
 
 		case <-func() <-chan time.Time {
 			if heartbeatTicker != nil {
@@ -450,17 +542,61 @@ func (c *TailCmd) Run(globals *Globals) error {
 		}():
 			heartbeat := &output.Heartbeat{
 				Type:          "heartbeat",
+				SchemaVersion: output.SchemaVersion,
 				Timestamp:     time.Now().Format(time.RFC3339Nano),
 				UptimeSeconds: int64(time.Since(startTime).Seconds()),
 				LogsSinceLast: logsSinceLast,
+				TailID:        tailID,
 			}
 			writer.WriteHeartbeat(heartbeat)
 			logsSinceLast = 0
+
+		case <-func() <-chan time.Time {
+			if idleTimer != nil {
+				return idleTimer.C
+			}
+			return nil
+		}():
+			if idleTimer != nil {
+				// Emit forced rollover due to idle timeout
+				if sessionChange := sessionTracker.ForceRollover("IDLE_TIMEOUT"); sessionChange != nil {
+					if sessionChange.EndSession != nil && globals.Format == "ndjson" {
+						output.NewNDJSONWriter(outputWriter).WriteSessionEnd(sessionChange.EndSession)
+					}
+					if pathBuilder != nil && sessionChange.StartSession != nil {
+						if err := openOutput(sessionChange.StartSession.Session); err != nil {
+							return err
+						}
+						setWriter(outputWriter)
+					}
+					if sessionChange.StartSession != nil {
+						if globals.Format == "ndjson" {
+							output.NewNDJSONWriter(outputWriter).WriteSessionStart(sessionChange.StartSession)
+						}
+						if tmuxMgr != nil {
+							var prevSummary *domain.SessionSummary
+							if sessionChange.EndSession != nil {
+								prevSummary = &sessionChange.EndSession.Summary
+							}
+							tmuxMgr.WriteSessionBanner(
+								sessionChange.StartSession.Session,
+								c.App,
+								sessionChange.StartSession.PID,
+								prevSummary,
+							)
+						}
+					}
+				}
+				// restart timer
+				idleTimer.Reset(idleDuration)
+			}
 		}
 	}
 }
 
-func (c *TailCmd) outputSummary(writer interface{ WriteSummary(*domain.LogSummary) error }, streamer *simulator.Streamer) {
+func (c *TailCmd) outputSummary(writer interface {
+	WriteSummary(*domain.LogSummary) error
+}, streamer *simulator.Streamer, tailID string) {
 	total, errors, faults := streamer.GetStats()
 	summary := &domain.LogSummary{
 		Type:       "summary",
@@ -470,6 +606,7 @@ func (c *TailCmd) outputSummary(writer interface{ WriteSummary(*domain.LogSummar
 		HasErrors:  errors > 0,
 		HasFaults:  faults > 0,
 		WindowEnd:  time.Now(),
+		TailID:     tailID,
 	}
 	writer.WriteSummary(summary)
 }
@@ -482,4 +619,12 @@ func (c *TailCmd) outputError(globals *Globals, code, message string) error {
 		fmt.Fprintf(globals.Stderr, "Error [%s]: %s\n", code, message)
 	}
 	return errors.New(message)
+}
+
+func generateTailID() string {
+	var b [10]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("tail-%d", time.Now().UnixNano())
+	}
+	return fmt.Sprintf("tail-%s-%d", hex.EncodeToString(b[:]), time.Now().UnixNano())
 }

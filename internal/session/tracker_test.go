@@ -10,7 +10,7 @@ import (
 )
 
 func TestNewTracker(t *testing.T) {
-	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123")
+	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123", "tail-1", "1.0", "100")
 
 	assert.Equal(t, 0, tracker.CurrentSession())
 
@@ -23,7 +23,7 @@ func TestNewTracker(t *testing.T) {
 }
 
 func TestTrackerFirstEntry(t *testing.T) {
-	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123")
+	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123", "tail-1", "1.0", "100")
 
 	entry := &domain.LogEntry{
 		Timestamp: time.Now(),
@@ -52,7 +52,7 @@ func TestTrackerFirstEntry(t *testing.T) {
 }
 
 func TestTrackerSameSession(t *testing.T) {
-	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123")
+	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123", "tail-1", "1.0", "100")
 
 	// First entry to initialize
 	entry1 := &domain.LogEntry{
@@ -85,7 +85,7 @@ func TestTrackerSameSession(t *testing.T) {
 }
 
 func TestTrackerPIDChange(t *testing.T) {
-	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123")
+	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123", "tail-1", "1.0", "100")
 
 	// First entry
 	entry1 := &domain.LogEntry{
@@ -139,7 +139,7 @@ func TestTrackerPIDChange(t *testing.T) {
 }
 
 func TestTrackerMultipleSessions(t *testing.T) {
-	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123")
+	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123", "tail-1", "1.0", "100")
 
 	// Session 1
 	tracker.CheckEntry(&domain.LogEntry{
@@ -164,7 +164,7 @@ func TestTrackerMultipleSessions(t *testing.T) {
 }
 
 func TestTrackerFaultCounting(t *testing.T) {
-	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123")
+	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123", "tail-1", "1.0", "100")
 
 	entries := []*domain.LogEntry{
 		{PID: 100, Subsystem: "com.example.app", Level: domain.LogLevelInfo},
@@ -187,7 +187,7 @@ func TestTrackerFaultCounting(t *testing.T) {
 }
 
 func TestTrackerGetFinalSummary(t *testing.T) {
-	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123")
+	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123", "tail-1", "1.0", "100")
 
 	// Uninitialized tracker
 	assert.Nil(t, tracker.GetFinalSummary())
@@ -210,7 +210,7 @@ func TestTrackerGetFinalSummary(t *testing.T) {
 }
 
 func TestTrackerDetectsPIDChangeAnySubsystem(t *testing.T) {
-	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123")
+	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123", "tail-1", "1.0", "100")
 
 	// Initialize with our app
 	tracker.CheckEntry(&domain.LogEntry{
@@ -232,7 +232,7 @@ func TestTrackerDetectsPIDChangeAnySubsystem(t *testing.T) {
 }
 
 func TestTrackerDetectsPIDChangeEmptySubsystem(t *testing.T) {
-	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123")
+	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123", "tail-1", "1.0", "100")
 
 	// Initialize with our app
 	tracker.CheckEntry(&domain.LogEntry{
@@ -248,4 +248,33 @@ func TestTrackerDetectsPIDChangeEmptySubsystem(t *testing.T) {
 	require.NotNil(t, change)
 	assert.Equal(t, "APP_RELAUNCHED", change.StartSession.Alert)
 	assert.Equal(t, 2, change.StartSession.Session)
+}
+
+func TestTrackerForceRollover(t *testing.T) {
+	tracker := NewTracker("com.example.app", "iPhone 17 Pro", "ABC123", "tail-1", "1.0", "100")
+
+	// initialize
+	tracker.CheckEntry(&domain.LogEntry{
+		PID: 100, Subsystem: "com.example.app", Level: domain.LogLevelInfo, ProcessImageUUID: "UUID-A",
+	})
+	tracker.CheckEntry(&domain.LogEntry{
+		PID: 100, Subsystem: "com.example.app", Level: domain.LogLevelError, ProcessImageUUID: "UUID-A",
+	})
+
+	change := tracker.ForceRollover("IDLE_TIMEOUT")
+	require.NotNil(t, change)
+	require.NotNil(t, change.EndSession)
+	require.NotNil(t, change.StartSession)
+	assert.Equal(t, 1, change.EndSession.Session)
+	assert.Equal(t, 2, change.StartSession.Session)
+	assert.Equal(t, "IDLE_TIMEOUT", change.StartSession.Alert)
+	assert.Equal(t, "tail-1", change.StartSession.TailID)
+
+	// Session stats reset
+	session, pid, logs, errors, faults := tracker.Stats()
+	assert.Equal(t, 2, session)
+	assert.Equal(t, 100, pid)
+	assert.Equal(t, 0, logs)
+	assert.Equal(t, 0, errors)
+	assert.Equal(t, 0, faults)
 }

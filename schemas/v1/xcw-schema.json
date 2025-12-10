@@ -300,6 +300,10 @@
           "format": "date-time",
           "type": "string"
         },
+        "tail_id": {
+          "description": "Identifier for the current tail invocation",
+          "type": "string"
+        },
         "type": {
           "const": "log",
           "type": "string"

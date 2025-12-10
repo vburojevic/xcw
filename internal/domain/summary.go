@@ -6,6 +6,7 @@ import "time"
 type LogSummary struct {
 	Type          string `json:"type"`          // Always "summary"
 	SchemaVersion int    `json:"schemaVersion"` // Schema version for compatibility
+	TailID        string `json:"tail_id,omitempty"`
 
 	// Time window
 	WindowStart time.Time `json:"windowStart"`

@@ -58,17 +58,18 @@ func (p *Parser) Parse(line []byte) (*domain.LogEntry, error) {
 	processName := filepath.Base(raw.ProcessImagePath)
 
 	return &domain.LogEntry{
-		Timestamp:   ts,
-		Level:       domain.ParseLogLevel(raw.MessageType),
-		Process:     processName,
-		PID:         raw.ProcessID,
-		TID:         raw.ThreadID,
-		Subsystem:   raw.Subsystem,
-		Category:    raw.Category,
-		Message:     raw.EventMessage,
-		ProcessPath: raw.ProcessImagePath,
-		SenderPath:  raw.SenderImagePath,
-		EventType:   raw.EventType,
+		Timestamp:        ts,
+		Level:            domain.ParseLogLevel(raw.MessageType),
+		Process:          processName,
+		PID:              raw.ProcessID,
+		TID:              raw.ThreadID,
+		Subsystem:        raw.Subsystem,
+		Category:         raw.Category,
+		Message:          raw.EventMessage,
+		ProcessPath:      raw.ProcessImagePath,
+		ProcessImageUUID: raw.ProcessImageUUID,
+		SenderPath:       raw.SenderImagePath,
+		EventType:        raw.EventType,
 	}, nil
 }
 

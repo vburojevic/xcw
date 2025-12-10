@@ -114,6 +114,7 @@ func buildDocumentation() *HelpOutput {
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --dedupe`, Description: "Collapse repeated identical messages"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --process MyApp --process MyAppExtension`, Description: "Filter by process name"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp -x noise -x spam`, Description: "Exclude multiple patterns"},
+					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --session-idle 60s`, Description: "Force a new session boundary after 60s of inactivity"},
 				},
 				OutputTypes:     []string{"log", "session_start", "session_end", "ready", "summary", "heartbeat", "tmux", "error"},
 				RelatedCommands: []string{"query", "watch", "analyze", "discover"},
@@ -230,6 +231,7 @@ func buildDocumentation() *HelpOutput {
 				Example: map[string]interface{}{
 					"type":          "log",
 					"schemaVersion": 1,
+					"tail_id":       "tail-abc",
 					"timestamp":     "2024-01-15T10:30:45.123Z",
 					"level":         "Error",
 					"process":       "MyApp",
@@ -246,6 +248,7 @@ func buildDocumentation() *HelpOutput {
 				Example: map[string]interface{}{
 					"type":          "session_start",
 					"schemaVersion": 1,
+					"tail_id":       "tail-abc",
 					"alert":         "APP_RELAUNCHED",
 					"session":       2,
 					"pid":           67890,
@@ -253,6 +256,9 @@ func buildDocumentation() *HelpOutput {
 					"app":           "com.example.myapp",
 					"simulator":     "iPhone 17 Pro",
 					"udid":          "ABC123-DEF456-...",
+					"version":       "1.4.0",
+					"build":         "2201",
+					"binary_uuid":   "C0FFEE-UUID",
 					"timestamp":     "2024-01-15T10:30:45.123Z",
 				},
 				When: "When xcw tail detects the app was relaunched (PID changed)",
@@ -262,6 +268,7 @@ func buildDocumentation() *HelpOutput {
 				Example: map[string]interface{}{
 					"type":          "session_end",
 					"schemaVersion": 1,
+					"tail_id":       "tail-abc",
 					"session":       1,
 					"pid":           12345,
 					"summary": map[string]interface{}{
@@ -288,6 +295,7 @@ func buildDocumentation() *HelpOutput {
 				Example: map[string]interface{}{
 					"type":          "summary",
 					"schemaVersion": 1,
+					"tail_id":       "tail-abc",
 					"totalCount":    142,
 					"errorCount":    3,
 					"faultCount":    0,

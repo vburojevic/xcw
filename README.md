@@ -28,6 +28,8 @@ That's it. This streams logs from your app in real-time.
 * **Structured NDJSON output** – each log event, summary or error is emitted as a JSON object, perfect for incremental consumption.
 * **Real-time streaming** – tail logs from a booted simulator or a specific device with `xcw tail`.
 * **Automatic session tracking** – detects app relaunches and emits `session_start`/`session_end` events so AI agents know when the app restarted.
+* **Tail-scoped IDs** – every event carries a `tail_id`, so agents can correlate only the events from the current tail invocation.
+* **Per-run file rotation** – when recording to disk, each app relaunch (or idle rollover) writes to a new file for clean ingestion.
 * **Historical queries** – query past logs with `xcw query` using relative durations such as `--since 5m`.
 * **Smart filtering** – filter by app bundle ID, log level, regex patterns, field values (`--where`), or exclude noise.
 * **Log discovery** – use `xcw discover` to understand what subsystems, categories, and processes exist before filtering.
@@ -125,7 +127,10 @@ The `tail` subcommand streams logs from the iOS Simulator.  It automatically pic
 xcw tail -a com.example.myapp
 
 # tail logs from a named simulator
-xcw tail -s "iPhone 15 Pro" -a com.example.myapp
+xcw tail -s "iPhone 17 Pro" -a com.example.myapp
+
+# force a new session if no logs arrive for 60s
+xcw tail -s "iPhone 17 Pro" -a com.example.myapp --session-idle 60s
 
 # filter logs by regex (--filter or --pattern or -p)
 xcw tail -a com.example.myapp --filter "error|warning"
@@ -364,12 +369,14 @@ xcw query -s "iPhone 17 Pro" -a com.example.myapp --since 5m -l error
 3. When the app relaunches (PID changes), `xcw` emits:
    - `session_end` with summary of the previous session (logs, errors, faults, duration)
    - `session_start` with `alert: "APP_RELAUNCHED"` and the new session number
+4. When the stream stops, a final `session_end` is emitted so the last run is closed.
+5. Optional: `--session-idle 60s` will force a `session_end`/`session_start` if no logs arrive for 60 seconds (useful to bracket manual test runs).
 
 **Example session events:**
 
 ```json
-{"type":"session_end","schemaVersion":1,"session":1,"pid":12345,"summary":{"total_logs":142,"errors":3,"faults":0,"duration_seconds":45}}
-{"type":"session_start","schemaVersion":1,"alert":"APP_RELAUNCHED","session":2,"pid":67890,"previous_pid":12345,"app":"com.example.myapp","simulator":"iPhone 17 Pro","udid":"...","timestamp":"2024-01-15T10:30:45Z"}
+{"type":"session_end","schemaVersion":1,"tail_id":"tail-abc","session":1,"pid":12345,"summary":{"total_logs":142,"errors":3,"faults":0,"duration_seconds":45}}
+{"type":"session_start","schemaVersion":1,"tail_id":"tail-abc","alert":"APP_RELAUNCHED","session":2,"pid":67890,"previous_pid":12345,"app":"com.example.myapp","simulator":"iPhone 17 Pro","udid":"...","version":"1.4.0","build":"2201","binary_uuid":"C0FFEE...","timestamp":"2024-01-15T10:30:45Z"}
 ```
 
 **Stderr alert (for AI agents scanning stderr):**
@@ -389,6 +396,8 @@ xcw query -s "iPhone 17 Pro" -a com.example.myapp --since 5m -l error
 
 This allows AI agents to keep `xcw tail` running continuously while you rebuild and relaunch your app from Xcode—no need to restart tailing.
 
+**Recording to files:** When you use `--output` or `--session-dir`, `xcw` now rotates to a fresh file on every app relaunch or idle rollover (one file per run). Filenames include the session number when you provide `--output`, or a new timestamped file is created when using `--session-dir`.
+
 ## Output format & JSON schema
 
 By default `xcw` writes NDJSON to stdout.  Each event includes a `type` and `schemaVersion` field.  Types include `log`, `console`, `ready`, `summary`, `analysis`, `heartbeat`, `error`, `info`, `warning`, `tmux`, `trigger`, `app`, `doctor`, `pick`, `session`, `session_start` and `session_end`.  The current schema version is `1`.
@@ -396,13 +405,13 @@ By default `xcw` writes NDJSON to stdout.  Each event includes a `type` and `sch
 Example log entry:
 
 ```json
-{"type":"log","schemaVersion":1,"timestamp":"2024-01-15T10:30:45.123Z","level":"Error","process":"MyApp","pid":1234,"subsystem":"com.example.myapp","category":"network","message":"Connection failed","session":1}
+{"type":"log","schemaVersion":1,"tail_id":"tail-abc","timestamp":"2024-01-15T10:30:45.123Z","level":"Error","process":"MyApp","pid":1234,"subsystem":"com.example.myapp","category":"network","message":"Connection failed","session":1}
 ```
 
 Example summary marker:
 
 ```json
-{"type":"summary","schemaVersion":1,"windowStart":"2024-01-15T10:25:00Z","windowEnd":"2024-01-15T10:30:00Z","totalCount":150,"errorCount":4,"faultCount":1,"hasErrors":true,"hasFaults":true,"errorRate":0.8}
+{"type":"summary","schemaVersion":1,"tail_id":"tail-abc","windowStart":"2024-01-15T10:25:00Z","windowEnd":"2024-01-15T10:30:00Z","totalCount":150,"errorCount":4,"faultCount":1,"hasErrors":true,"hasFaults":true,"errorRate":0.8}
 ```
 
 You can generate a machine-readable JSON schema for validation:

@@ -51,17 +51,19 @@ func ParseLogLevel(s string) LogLevel {
 
 // LogEntry represents a parsed log message from the unified logging system
 type LogEntry struct {
-	Timestamp   time.Time `json:"timestamp"`
-	Level       LogLevel  `json:"level"`
-	Process     string    `json:"process"`
-	PID         int       `json:"pid"`
-	TID         int       `json:"tid,omitempty"`
-	Subsystem   string    `json:"subsystem,omitempty"`
-	Category    string    `json:"category,omitempty"`
-	Message     string    `json:"message"`
-	ProcessPath string    `json:"processPath,omitempty"`
-	SenderPath  string    `json:"senderPath,omitempty"`
-	EventType   string    `json:"eventType,omitempty"`
+	Timestamp        time.Time `json:"timestamp"`
+	Level            LogLevel  `json:"level"`
+	Process          string    `json:"process"`
+	PID              int       `json:"pid"`
+	TID              int       `json:"tid,omitempty"`
+	Subsystem        string    `json:"subsystem,omitempty"`
+	Category         string    `json:"category,omitempty"`
+	Message          string    `json:"message"`
+	ProcessPath      string    `json:"processPath,omitempty"`
+	ProcessImageUUID string    `json:"processImageUUID,omitempty"`
+	SenderPath       string    `json:"senderPath,omitempty"`
+	EventType        string    `json:"eventType,omitempty"`
+	TailID           string    `json:"tail_id,omitempty"`
 
 	// Session tracking (populated when session tracking is active)
 	Session int `json:"session,omitempty"` // Session number (1, 2, 3...)
