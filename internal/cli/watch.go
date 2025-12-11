@@ -316,14 +316,8 @@ func (c *WatchCmd) Run(globals *Globals) error {
 			}
 
 		case err := <-streamer.Errors():
-			if !globals.Quiet {
-				if globals.Format == "ndjson" {
-					em := output.NewEmitter(outputWriter)
-					em.WriteWarning(err.Error())
-				} else {
-					fmt.Fprintf(globals.Stderr, "Warning: %s\n", err.Error())
-				}
-			}
+			em := output.NewEmitter(outputWriter)
+			emitWarning(globals, em, err.Error())
 		}
 	}
 }
