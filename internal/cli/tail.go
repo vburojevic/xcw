@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -114,8 +113,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 	// Determine output destination
 	var outputWriter io.Writer = globals.Stdout
 	var tmuxMgr *tmux.Manager
-	var outputFile *os.File
-	var bufferedWriter *bufio.Writer
+	rotator := newRotation(nil)
 
 	// Determine output file path builder (supports per-session rotation)
 	var pathBuilder func(session int) (string, error)
@@ -143,28 +141,16 @@ func (c *TailCmd) Run(globals *Globals) error {
 		if pathBuilder == nil {
 			return nil
 		}
-
-		path, err := pathBuilder(sessionNum)
+		rotator.pathBuilder = pathBuilder
+		bw, file, path, err := rotator.Open(sessionNum)
 		if err != nil {
-			return c.outputError(globals, "SESSION_DIR_ERROR", err.Error())
+			return c.outputError(globals, "FILE_CREATE_ERROR", err.Error())
 		}
-
-		// Close previous file
-		if bufferedWriter != nil {
-			bufferedWriter.Flush()
+		_ = file
+		if bw != nil {
+			outputWriter = bw
 		}
-		if outputFile != nil {
-			outputFile.Close()
-		}
-
-		outputFile, err = os.Create(path)
-		if err != nil {
-			return c.outputError(globals, "FILE_CREATE_ERROR", fmt.Sprintf("failed to create output file: %s", err))
-		}
-		bufferedWriter = bufio.NewWriter(outputFile)
-		outputWriter = bufferedWriter
-
-		if !globals.Quiet {
+		if !globals.Quiet && path != "" {
 			if globals.Format == "ndjson" {
 				output.NewNDJSONWriter(globals.Stdout).WriteInfo(
 					fmt.Sprintf("Writing logs to %s", path),
@@ -182,12 +168,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 		}
 		if pathBuilder != nil {
 			defer func() {
-				if bufferedWriter != nil {
-					bufferedWriter.Flush()
-				}
-				if outputFile != nil {
-					outputFile.Close()
-				}
+				rotator.Close()
 			}()
 		}
 	} else {
