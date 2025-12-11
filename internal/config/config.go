@@ -72,7 +72,7 @@ type WatchConfig struct {
 func Default() *Config {
 	return &Config{
 		Format:  "ndjson",
-		Level:   "default",
+		Level:   "debug",
 		Quiet:   false,
 		Verbose: false,
 		Defaults: DefaultsConfig{

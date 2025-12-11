@@ -14,7 +14,7 @@ func TestDefault(t *testing.T) {
 
 	require.NotNil(t, cfg)
 	assert.Equal(t, "ndjson", cfg.Format)
-	assert.Equal(t, "default", cfg.Level)
+	assert.Equal(t, "debug", cfg.Level)
 	assert.False(t, cfg.Quiet)
 	assert.False(t, cfg.Verbose)
 	assert.Equal(t, "booted", cfg.Defaults.Simulator)
