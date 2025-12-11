@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"math/rand"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -15,17 +16,17 @@ import (
 
 // StreamOptions configures log streaming behavior
 type StreamOptions struct {
-	BundleID          string          // Filter by app bundle identifier
-	Subsystems        []string        // Filter by subsystems
-	Categories        []string        // Filter by categories
-	Processes         []string        // Filter by process names
-	MinLevel          domain.LogLevel // Minimum log level (inclusive)
-	MaxLevel          domain.LogLevel // Maximum log level (inclusive, empty = no max)
+	BundleID          string           // Filter by app bundle identifier
+	Subsystems        []string         // Filter by subsystems
+	Categories        []string         // Filter by categories
+	Processes         []string         // Filter by process names
+	MinLevel          domain.LogLevel  // Minimum log level (inclusive)
+	MaxLevel          domain.LogLevel  // Maximum log level (inclusive, empty = no max)
 	Pattern           *regexp.Regexp   // Regex pattern for message filtering
 	ExcludePatterns   []*regexp.Regexp // Regex patterns to exclude from messages
-	ExcludeSubsystems []string        // Subsystems to exclude
-	BufferSize        int             // Ring buffer size
-	RawPredicate      string          // Raw NSPredicate string (overrides other filters)
+	ExcludeSubsystems []string         // Subsystems to exclude
+	BufferSize        int              // Ring buffer size
+	RawPredicate      string           // Raw NSPredicate string (overrides other filters)
 }
 
 // Streamer handles real-time log streaming from a simulator
@@ -101,6 +102,7 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 
 	backoff := time.Second
 	maxBackoff := 30 * time.Second
+	rand.Seed(time.Now().UnixNano())
 
 	for {
 		select {
@@ -118,7 +120,7 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			}
-			backoff = min(backoff*2, maxBackoff)
+			backoff = jitter(min(backoff*2, maxBackoff))
 			continue
 		}
 
@@ -131,7 +133,7 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 				case <-ctx.Done():
 					return
 				}
-				backoff = min(backoff*2, maxBackoff)
+				backoff = jitter(min(backoff*2, maxBackoff))
 				continue
 			}
 
@@ -160,7 +162,7 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(backoff):
-			backoff = min(backoff*2, maxBackoff)
+			backoff = jitter(min(backoff*2, maxBackoff))
 		}
 	}
 }
@@ -361,6 +363,12 @@ func (s *Streamer) sendError(err error) {
 	case s.errors <- err:
 	default:
 	}
+}
+
+func jitter(d time.Duration) time.Duration {
+	// random between 0.5x and 1.5x
+	factor := 0.5 + rand.Float64()
+	return time.Duration(float64(d) * factor)
 }
 
 // Stop terminates the log stream

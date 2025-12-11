@@ -583,8 +583,18 @@ func (c *TailCmd) Run(globals *Globals) error {
 			lastSeen = time.Now()
 			if maxLogs > 0 && totalLogs >= maxLogs {
 				if final := sessionTracker.GetFinalSummary(); final != nil && globals.Format == "ndjson" {
-					output.NewNDJSONWriter(outputWriter).WriteSessionEnd(final)
-					output.NewNDJSONWriter(outputWriter).WriteCutoff("max_logs", tailID, final.Session, totalLogs)
+					emitter.SessionEnd(final)
+					emitter.Cutoff("max_logs", tailID, final.Session, totalLogs)
+					emitter.WriteHeartbeat(&output.Heartbeat{
+						Type:              "heartbeat",
+						SchemaVersion:     output.SchemaVersion,
+						Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
+						UptimeSeconds:     int64(time.Since(startTime).Seconds()),
+						LogsSinceLast:     logsSinceLast,
+						TailID:            tailID,
+						LatestSession:     sessionTracker.CurrentSession(),
+						LastSeenTimestamp: lastSeen.UTC().Format(time.RFC3339Nano),
+					})
 				}
 				return nil
 			}
@@ -622,8 +632,18 @@ func (c *TailCmd) Run(globals *Globals) error {
 			// cutoff takes precedence
 			if cutoffTimer != nil {
 				if final := sessionTracker.GetFinalSummary(); final != nil && globals.Format == "ndjson" {
-					output.NewNDJSONWriter(outputWriter).WriteSessionEnd(final)
-					output.NewNDJSONWriter(outputWriter).WriteCutoff("max_duration", tailID, final.Session, totalLogs)
+					emitter.SessionEnd(final)
+					emitter.Cutoff("max_duration", tailID, final.Session, totalLogs)
+					emitter.WriteHeartbeat(&output.Heartbeat{
+						Type:              "heartbeat",
+						SchemaVersion:     output.SchemaVersion,
+						Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
+						UptimeSeconds:     int64(time.Since(startTime).Seconds()),
+						LogsSinceLast:     logsSinceLast,
+						TailID:            tailID,
+						LatestSession:     sessionTracker.CurrentSession(),
+						LastSeenTimestamp: lastSeen.UTC().Format(time.RFC3339Nano),
+					})
 				}
 				return nil
 			}
