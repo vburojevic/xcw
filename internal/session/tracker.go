@@ -82,9 +82,7 @@ func (t *Tracker) CheckEntry(entry *domain.LogEntry) *SessionChange {
 		}
 	}
 
-	// PID or binary UUID changed - app was relaunched/reinstalled
-	binaryChanged := entry.ProcessImageUUID != "" && entry.ProcessImageUUID != t.currentBinaryUUID
-	if (pid != t.currentPID && pid > 0) || binaryChanged {
+	if t.shouldStartNewSession(pid, entry.ProcessImageUUID) {
 		previousPID := t.currentPID
 		previousSession := t.currentSession
 
@@ -129,6 +127,13 @@ func (t *Tracker) CheckEntry(entry *domain.LogEntry) *SessionChange {
 	t.currentBinaryUUID = entry.ProcessImageUUID
 	t.updateCounts(entry)
 	return nil
+}
+
+// shouldStartNewSession decides if PID or binary UUID change indicates a relaunch.
+func (t *Tracker) shouldStartNewSession(pid int, imageUUID string) bool {
+	binaryChanged := imageUUID != "" && imageUUID != t.currentBinaryUUID
+	pidChanged := pid != t.currentPID && pid > 0
+	return pidChanged || binaryChanged
 }
 
 // updateCounts updates error/fault counts based on log level

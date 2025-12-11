@@ -59,6 +59,14 @@ fmt:
 	go fmt ./...
 	goimports -w .
 
+## docs: Regenerate machine-readable help docs (docs/help.json)
+docs:
+	./scripts/gen-readme.sh
+
+## schema: Regenerate JSON schema from CLI output
+schema:
+	./scripts/gen-schema.sh
+
 ## tidy: Tidy modules
 tidy:
 	@echo "Tidying modules..."

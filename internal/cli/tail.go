@@ -24,35 +24,19 @@ import (
 
 // TailCmd streams real-time logs from a simulator
 type TailCmd struct {
-	Simulator        string   `short:"s" help:"Simulator name or UDID"`
-	Booted           bool     `short:"b" help:"Use booted simulator (error if multiple)"`
-	App              string   `short:"a" required:"" help:"App bundle identifier to filter logs"`
-	Pattern          string   `short:"p" aliases:"filter" help:"Regex pattern to filter log messages"`
-	Exclude          []string `short:"x" help:"Regex pattern to exclude from log messages (can be repeated)"`
-	ExcludeSubsystem []string `help:"Exclude logs from subsystem (can be repeated, supports * wildcard)"`
-	Subsystem        []string `help:"Filter by subsystem (can be repeated)"`
-	Category         []string `help:"Filter by category (can be repeated)"`
-	Process          []string `help:"Filter by process name (can be repeated)"`
-	MinLevel         string   `help:"Minimum log level: debug, info, default, error, fault (overrides global --level)"`
-	MaxLevel         string   `help:"Maximum log level: debug, info, default, error, fault"`
-	Predicate        string   `help:"Raw NSPredicate filter (overrides --app, --subsystem, --category)"`
-	BufferSize       int      `default:"100" help:"Number of recent logs to buffer"`
-	SummaryInterval  string   `help:"Emit periodic summaries (e.g., '30s', '1m')"`
-	Heartbeat        string   `help:"Emit periodic heartbeat messages (e.g., '10s', '30s')"`
-	Output           string   `short:"o" help:"Write output to explicit file path"`
-	SessionDir       string   `help:"Directory for session files (default: ~/.xcw/sessions)"`
-	SessionPrefix    string   `help:"Prefix for session filename (default: app bundle ID)"`
-	Tmux             bool     `help:"Output to tmux session"`
-	Session          string   `help:"Custom tmux session name (default: xcw-<simulator>)"`
-	WaitForLaunch    bool     `help:"Start streaming immediately, emit 'ready' event when capture is active"`
-	Dedupe           bool     `help:"Collapse repeated identical messages"`
-	DedupeWindow     string   `help:"Time window for deduplication (e.g., '5s', '1m'). Without this, only consecutive duplicates are collapsed"`
-	Where            []string `short:"w" help:"Field filter (e.g., 'level=error', 'message~timeout'). Operators: =, !=, ~, !~, >=, <=, ^, $"`
-	SessionIdle      string   `help:"Emit session boundary after idle period with no logs (e.g., '60s')"`
-	NoAgentHints     bool     `help:"Suppress agent_hints banners (leave off for AI agents)"`
-	DryRunJSON       bool     `help:"Print resolved stream options as JSON and exit (no streaming)"`
-	MaxDuration      string   `help:"Stop after duration (e.g., '5m') emitting session_end (agent-safe cutoff)"`
-	MaxLogs          int      `help:"Stop after N logs emitting session_end (agent-safe cutoff)"`
+	TailFilterFlags
+	TailOutputFlags
+	TailAgentFlags
+
+	Simulator   string   `short:"s" help:"Simulator name or UDID"`
+	Booted      bool     `short:"b" help:"Use booted simulator (error if multiple)"`
+	App         string   `short:"a" required:"" help:"App bundle identifier to filter logs"`
+	Subsystem   []string `help:"Filter by subsystem (can be repeated)"`
+	Category    []string `help:"Filter by category (can be repeated)"`
+	Predicate   string   `help:"Raw NSPredicate filter (overrides --app, --subsystem, --category)"`
+	BufferSize  int      `default:"100" help:"Number of recent logs to buffer"`
+	Recorder    string   `short:"r" help:"Write raw log stream to file (with sessions)"`
+	SessionName string   `help:"Custom session name for recording"`
 }
 
 // Run executes the tail command
@@ -255,6 +239,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 	if err != nil {
 		return c.outputError(globals, "INVALID_FILTER", err.Error())
 	}
+	pipeline := filter.NewPipeline(pattern, excludePatterns, whereFilter)
 
 	// Determine log level (command-specific overrides global)
 	minLevel, maxLevel := resolveLevels(c.MinLevel, c.MaxLevel, globals.Level)
@@ -520,7 +505,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 			}
 
 			// Apply where filter if enabled
-			if whereFilter != nil && !whereFilter.Match(&entry) {
+			if pipeline != nil && !pipeline.Match(&entry) {
 				continue // Skip entries that don't match where clauses
 			}
 

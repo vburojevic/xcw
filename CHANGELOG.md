@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2025-12-11
+
+### Added
+- Filter pipeline abstraction (`internal/filter/pipeline.go`) and adoption in tail for extensible predicate chaining (pattern/exclude/where).
+- Grouped tail flags into logical structs while preserving flag names for agents.
+- Scripts: `scripts/gen-readme.sh` (help JSON regeneration) and `scripts/gen-schema.sh` (schema refresh); Makefile targets `docs` and `schema`.
+
+### Changed
+- Session tracker refactored with clearer relaunch decision helper.
+- NDJSON/test improvements from 0.11.x retained.
+
 ## [0.11.4] - 2025-12-11
 
 ### Changed
