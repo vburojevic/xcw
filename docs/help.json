@@ -1,6 +1,6 @@
 {
   "type": "documentation",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "purpose": "iOS Simulator log streaming CLI optimized for AI agents. Outputs structured NDJSON for real-time and historical log access.",
   "primary_command": "tail",
   "agent_guidance": "ALWAYS START WITH: xcw tail -s \u003csimulator\u003e -a \u003cbundle_id\u003e. This is THE primary command for monitoring iOS app logs. Run 'xcw list' to get simulator names, and 'xcw apps' to get bundle IDs. Only use other commands (query, watch, analyze) for specific use cases AFTER you've tried tail. The 'query' command reads from macOS system logs and is only useful when you forgot to start tail. Tmux (--tmux) is for human visual monitoring; AI agents should use stdout or --output instead.",

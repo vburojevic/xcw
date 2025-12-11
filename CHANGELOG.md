@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.14.0] - 2025-12-11
+## [0.14.1] - 2025-12-11
 
 ### Added
 - Clock injection (benbjohnson/clock) for deterministic timers in tail/watch.
@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lipgloss-styled text output for human mode.
 - Session_debug NDJSON event and schema entry; embedded docs/schema via go:embed for offline use.
 - CI workflow with golangci-lint and doc/schema drift check.
+- Auto-disable styling when stdout is not a TTY to keep piped logs clean.
 
 ### Changed
 - Heartbeats pooled to reduce allocations; filter pipeline reused across commands.
