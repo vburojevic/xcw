@@ -75,6 +75,8 @@ func NewGlobals(cli *CLI) *Globals {
 
 // NewGlobalsWithConfig creates a new Globals instance with config fallbacks
 func NewGlobalsWithConfig(cli *CLI, cfg *config.Config) *Globals {
+	const cliDefaultFormat = "ndjson"
+	const cliDefaultLevel = "debug"
 	g := &Globals{
 		Format:  cli.Format,
 		Level:   cli.Level,
@@ -87,6 +89,13 @@ func NewGlobalsWithConfig(cli *CLI, cfg *config.Config) *Globals {
 
 	// Apply config values if CLI flags weren't explicitly set
 	if cfg != nil {
+		// Apply format/level if user left defaults
+		if cli.Format == cliDefaultFormat && cfg.Format != "" {
+			g.Format = cfg.Format
+		}
+		if cli.Level == cliDefaultLevel && cfg.Level != "" {
+			g.Level = cfg.Level
+		}
 		// If quiet wasn't set via CLI, use config value
 		if !cli.Quiet && cfg.Quiet {
 			g.Quiet = cfg.Quiet
@@ -122,6 +131,6 @@ func (v *VersionCmd) Run(globals *Globals) error {
 
 // Version information (set at build time)
 var (
-	Version = "0.14.1"
+	Version = "0.15.0"
 	Commit  = "none"
 )

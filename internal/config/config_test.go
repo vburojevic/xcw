@@ -21,6 +21,12 @@ func TestDefault(t *testing.T) {
 	assert.Equal(t, 100, cfg.Defaults.BufferSize)
 	assert.Equal(t, "5m", cfg.Defaults.Since)
 	assert.Equal(t, 1000, cfg.Defaults.Limit)
+	assert.Equal(t, "booted", cfg.Tail.Simulator)
+	assert.Equal(t, "booted", cfg.Query.Simulator)
+	assert.Equal(t, "booted", cfg.Watch.Simulator)
+	assert.Equal(t, "5m", cfg.Query.Since)
+	assert.Equal(t, 1000, cfg.Query.Limit)
+	assert.Equal(t, "5s", cfg.Watch.Cooldown)
 }
 
 func TestLoad(t *testing.T) {
@@ -107,6 +113,29 @@ defaults:
   exclude_subsystems:
     - com.apple.*
   exclude_pattern: "heartbeat|keepalive"
+tail:
+  simulator: "iPhone 17 Pro"
+  app: com.tail
+  summary_interval: 15s
+  heartbeat: 3s
+  session_idle: 45s
+  exclude:
+    - noise
+  where:
+    - level=error
+query:
+  simulator: booted
+  app: com.query
+  since: 20m
+  limit: 250
+  exclude:
+    - spam
+  where:
+    - process=MyProcess
+watch:
+  simulator: "iPhone 17 Pro"
+  app: com.watch
+  cooldown: 2s
 `
 		configPath := filepath.Join(tmpDir, "xcw.yaml")
 		err := os.WriteFile(configPath, []byte(configContent), 0644)
@@ -130,6 +159,22 @@ defaults:
 		assert.Contains(t, cfg.Defaults.Categories, "network")
 		assert.Contains(t, cfg.Defaults.ExcludeSubsystems, "com.apple.*")
 		assert.Equal(t, "heartbeat|keepalive", cfg.Defaults.ExcludePattern)
+		assert.Equal(t, "iPhone 17 Pro", cfg.Tail.Simulator)
+		assert.Equal(t, "com.tail", cfg.Tail.App)
+		assert.Equal(t, "15s", cfg.Tail.SummaryInterval)
+		assert.Equal(t, "3s", cfg.Tail.Heartbeat)
+		assert.Equal(t, "45s", cfg.Tail.SessionIdle)
+		assert.Equal(t, []string{"noise"}, cfg.Tail.Exclude)
+		assert.Equal(t, []string{"level=error"}, cfg.Tail.Where)
+		assert.Equal(t, "booted", cfg.Query.Simulator)
+		assert.Equal(t, "com.query", cfg.Query.App)
+		assert.Equal(t, "20m", cfg.Query.Since)
+		assert.Equal(t, 250, cfg.Query.Limit)
+		assert.Equal(t, []string{"spam"}, cfg.Query.Exclude)
+		assert.Equal(t, []string{"process=MyProcess"}, cfg.Query.Where)
+		assert.Equal(t, "iPhone 17 Pro", cfg.Watch.Simulator)
+		assert.Equal(t, "com.watch", cfg.Watch.App)
+		assert.Equal(t, "2s", cfg.Watch.Cooldown)
 	})
 }
 
@@ -242,49 +287,42 @@ func TestFindConfigFile(t *testing.T) {
 	})
 }
 
-func TestApplyEnvOverrides(t *testing.T) {
-	t.Run("overrides format from env", func(t *testing.T) {
-		cfg := Default()
-		os.Setenv("XCW_FORMAT", "text")
-		defer os.Unsetenv("XCW_FORMAT")
-
-		applyEnvOverrides(cfg)
+func TestEnvOverridesViaViper(t *testing.T) {
+	t.Run("format overrides from env", func(t *testing.T) {
+		t.Setenv("XCW_FORMAT", "text")
+		cfg, err := Load()
+		require.NoError(t, err)
 		assert.Equal(t, "text", cfg.Format)
 	})
 
-	t.Run("overrides quiet from env with true", func(t *testing.T) {
-		cfg := Default()
-		os.Setenv("XCW_QUIET", "true")
-		defer os.Unsetenv("XCW_QUIET")
-
-		applyEnvOverrides(cfg)
+	t.Run("quiet overrides from env", func(t *testing.T) {
+		t.Setenv("XCW_QUIET", "true")
+		cfg, err := Load()
+		require.NoError(t, err)
 		assert.True(t, cfg.Quiet)
 	})
 
-	t.Run("overrides quiet from env with 1", func(t *testing.T) {
-		cfg := Default()
-		os.Setenv("XCW_QUIET", "1")
-		defer os.Unsetenv("XCW_QUIET")
-
-		applyEnvOverrides(cfg)
-		assert.True(t, cfg.Quiet)
+	t.Run("tail heartbeat override via env replacer", func(t *testing.T) {
+		t.Setenv("XCW_TAIL_HEARTBEAT", "2s")
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.Equal(t, "2s", cfg.Tail.Heartbeat)
 	})
 
-	t.Run("does not override quiet with other values", func(t *testing.T) {
-		cfg := Default()
-		os.Setenv("XCW_QUIET", "yes")
-		defer os.Unsetenv("XCW_QUIET")
-
-		applyEnvOverrides(cfg)
-		assert.False(t, cfg.Quiet)
+	t.Run("simulator shortcut propagates to defaults and tail/query/watch", func(t *testing.T) {
+		t.Setenv("XCW_SIMULATOR", "iPhone 17 Pro")
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.Equal(t, "iPhone 17 Pro", cfg.Defaults.Simulator)
+		assert.Equal(t, "iPhone 17 Pro", cfg.Tail.Simulator)
+		assert.Equal(t, "iPhone 17 Pro", cfg.Query.Simulator)
+		assert.Equal(t, "iPhone 17 Pro", cfg.Watch.Simulator)
 	})
 
-	t.Run("overrides app from env", func(t *testing.T) {
-		cfg := Default()
-		os.Setenv("XCW_APP", "com.example.app")
-		defer os.Unsetenv("XCW_APP")
-
-		applyEnvOverrides(cfg)
-		assert.Equal(t, "com.example.app", cfg.Defaults.App)
+	t.Run("query limit override via env", func(t *testing.T) {
+		t.Setenv("XCW_QUERY_LIMIT", "42")
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.Equal(t, 42, cfg.Query.Limit)
 	})
 }

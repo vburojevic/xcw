@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/vburojevic/xcw/internal/config"
 	"github.com/vburojevic/xcw/internal/domain"
 	"github.com/vburojevic/xcw/internal/output"
 	"github.com/vburojevic/xcw/internal/simulator"
@@ -35,6 +36,8 @@ type QueryCmd struct {
 
 // Run executes the query command
 func (c *QueryCmd) Run(globals *Globals) error {
+	applyQueryDefaults(globals.Config, c)
+
 	ctx := context.Background()
 
 	// Validate mutual exclusivity of flags
@@ -221,6 +224,34 @@ func (c *QueryCmd) Run(globals *Globals) error {
 
 func (c *QueryCmd) outputError(globals *Globals, code, message string) error {
 	return outputErrorCommon(globals, code, message)
+}
+
+func applyQueryDefaults(cfg *config.Config, c *QueryCmd) {
+	if cfg == nil {
+		return
+	}
+	if c.Simulator == "" {
+		if cfg.Query.Simulator != "" {
+			c.Simulator = cfg.Query.Simulator
+		} else if cfg.Defaults.Simulator != "" {
+			c.Simulator = cfg.Defaults.Simulator
+		}
+	}
+	if c.App == "" && cfg.Query.App != "" {
+		c.App = cfg.Query.App
+	}
+	if c.Since == "5m" && cfg.Query.Since != "" {
+		c.Since = cfg.Query.Since
+	}
+	if c.Limit == 1000 && cfg.Query.Limit != 0 {
+		c.Limit = cfg.Query.Limit
+	}
+	if len(c.Exclude) == 0 && len(cfg.Query.Exclude) > 0 {
+		c.Exclude = append(c.Exclude, cfg.Query.Exclude...)
+	}
+	if len(c.Where) == 0 && len(cfg.Query.Where) > 0 {
+		c.Where = append(c.Where, cfg.Query.Where...)
+	}
 }
 
 // parseTimeOrDuration parses a time string as either RFC3339 or a duration offset from now

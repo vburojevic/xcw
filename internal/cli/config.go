@@ -32,6 +32,9 @@ func (c *ConfigShowCmd) Run(globals *Globals) error {
 			"quiet":    cfg.Quiet,
 			"verbose":  cfg.Verbose,
 			"defaults": cfg.Defaults,
+			"tail":     cfg.Tail,
+			"query":    cfg.Query,
+			"watch":    cfg.Watch,
 		}
 		encoder := json.NewEncoder(globals.Stdout)
 		return encoder.Encode(output)
@@ -51,6 +54,12 @@ func (c *ConfigShowCmd) Run(globals *Globals) error {
 	fmt.Fprintf(globals.Stdout, "  buffer_size: %d\n", cfg.Defaults.BufferSize)
 	fmt.Fprintf(globals.Stdout, "  since:       %s\n", cfg.Defaults.Since)
 	fmt.Fprintf(globals.Stdout, "  limit:       %d\n", cfg.Defaults.Limit)
+	fmt.Fprintf(globals.Stdout, "Tail defaults: simulator=%s heartbeat=%s summary_interval=%s session_idle=%s\n",
+		cfg.Tail.Simulator, cfg.Tail.Heartbeat, cfg.Tail.SummaryInterval, cfg.Tail.SessionIdle)
+	fmt.Fprintf(globals.Stdout, "Query defaults: simulator=%s since=%s limit=%d\n",
+		cfg.Query.Simulator, cfg.Query.Since, cfg.Query.Limit)
+	fmt.Fprintf(globals.Stdout, "Watch defaults: simulator=%s cooldown=%s\n",
+		cfg.Watch.Simulator, cfg.Watch.Cooldown)
 
 	if len(cfg.Defaults.ExcludeSubsystems) > 0 {
 		fmt.Fprintf(globals.Stdout, "  exclude_subsystems: %v\n", cfg.Defaults.ExcludeSubsystems)
@@ -157,6 +166,21 @@ defaults:
 
   # Regex pattern to exclude from messages
   # exclude_pattern: "heartbeat|keepalive"
+
+tail:
+  # heartbeat: 10s
+  # summary_interval: 30s
+  # session_idle: 60s
+  # simulator: booted
+
+query:
+  # simulator: booted
+  # since: 5m
+  # limit: 1000
+
+watch:
+  # simulator: booted
+  # cooldown: 5s
 `
 
 	fmt.Fprint(globals.Stdout, sampleConfig)

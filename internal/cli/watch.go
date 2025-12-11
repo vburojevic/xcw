@@ -16,6 +16,7 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-isatty"
+	"github.com/vburojevic/xcw/internal/config"
 	"github.com/vburojevic/xcw/internal/domain"
 	"github.com/vburojevic/xcw/internal/output"
 	"github.com/vburojevic/xcw/internal/simulator"
@@ -77,6 +78,7 @@ func (c *WatchCmd) Run(globals *Globals) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	maybeNoStyleWatch(globals)
+	applyWatchDefaults(globals.Config, c)
 	clk := clock.New()
 
 	// Handle signals for graceful shutdown
@@ -435,4 +437,23 @@ func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, ent
 
 func (c *WatchCmd) outputError(globals *Globals, code, message string) error {
 	return outputErrorCommon(globals, code, message)
+}
+
+func applyWatchDefaults(cfg *config.Config, c *WatchCmd) {
+	if cfg == nil {
+		return
+	}
+	if c.Simulator == "" {
+		if cfg.Watch.Simulator != "" {
+			c.Simulator = cfg.Watch.Simulator
+		} else if cfg.Defaults.Simulator != "" {
+			c.Simulator = cfg.Defaults.Simulator
+		}
+	}
+	if c.App == "" && cfg.Watch.App != "" {
+		c.App = cfg.Watch.App
+	}
+	if c.Cooldown == "5s" && cfg.Watch.Cooldown != "" {
+		c.Cooldown = cfg.Watch.Cooldown
+	}
 }

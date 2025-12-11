@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2025-12-11
+
+### Added
+- Viper-backed configuration with env-prefix `XCW_`, nested key replacer, and per-command sections (`tail`, `query`, `watch`).
+- Config show now prints tail/query/watch defaults; README documents precedence and sample config tuned for AI agents.
+- Tests for env overrides, config precedence, and apply-default helpers for tail/query/watch, plus Globals config fallback coverage.
+
+### Changed
+- CLI format/level/quiet now honor config when CLI flags stay at their defaults.
+- Tail/query/watch commands consume config defaults automatically to reduce repeated flags for agents.
+
 ## [0.14.1] - 2025-12-11
 
 ### Added

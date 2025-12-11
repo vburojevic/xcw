@@ -18,6 +18,7 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-isatty"
+	"github.com/vburojevic/xcw/internal/config"
 	"github.com/vburojevic/xcw/internal/domain"
 	"github.com/vburojevic/xcw/internal/filter"
 	"github.com/vburojevic/xcw/internal/output"
@@ -47,6 +48,7 @@ type TailCmd struct {
 func (c *TailCmd) Run(globals *Globals) error {
 	// Disable styles when stdout is not a TTY
 	maybeNoStyle(globals)
+	applyTailDefaults(globals.Config, c)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -760,5 +762,39 @@ func maybeNoStyle(globals *Globals) {
 				bannerStyle = bannerStyle.UnsetForeground().UnsetBold()
 			}
 		}
+	}
+}
+
+func applyTailDefaults(cfg *config.Config, c *TailCmd) {
+	if cfg == nil {
+		return
+	}
+	if c.Simulator == "" {
+		if cfg.Tail.Simulator != "" {
+			c.Simulator = cfg.Tail.Simulator
+		} else if cfg.Defaults.Simulator != "" {
+			c.Simulator = cfg.Defaults.Simulator
+		}
+	}
+	if c.App == "" && cfg.Tail.App != "" {
+		c.App = cfg.Tail.App
+	}
+	if c.SummaryInterval == "" && cfg.Tail.SummaryInterval != "" {
+		c.SummaryInterval = cfg.Tail.SummaryInterval
+	}
+	if c.Heartbeat == "" && cfg.Tail.Heartbeat != "" {
+		c.Heartbeat = cfg.Tail.Heartbeat
+	}
+	if c.SessionIdle == "" && cfg.Tail.SessionIdle != "" {
+		c.SessionIdle = cfg.Tail.SessionIdle
+	}
+	if len(c.Exclude) == 0 && len(cfg.Tail.Exclude) > 0 {
+		c.Exclude = append(c.Exclude, cfg.Tail.Exclude...)
+	}
+	if len(c.Where) == 0 && len(cfg.Tail.Where) > 0 {
+		c.Where = append(c.Where, cfg.Tail.Where...)
+	}
+	if c.BufferSize == 100 && cfg.Defaults.BufferSize != 0 {
+		c.BufferSize = cfg.Defaults.BufferSize
 	}
 }

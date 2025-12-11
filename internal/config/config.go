@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -17,6 +18,9 @@ type Config struct {
 
 	// Default values for commands
 	Defaults DefaultsConfig `mapstructure:"defaults"`
+	Tail     TailConfig     `mapstructure:"tail"`
+	Query    QueryConfig    `mapstructure:"query"`
+	Watch    WatchConfig    `mapstructure:"watch"`
 }
 
 // DefaultsConfig holds default values for various commands
@@ -39,6 +43,31 @@ type DefaultsConfig struct {
 	ExcludePattern    string   `mapstructure:"exclude_pattern"`
 }
 
+type TailConfig struct {
+	Simulator       string   `mapstructure:"simulator"`
+	App             string   `mapstructure:"app"`
+	SummaryInterval string   `mapstructure:"summary_interval"`
+	Heartbeat       string   `mapstructure:"heartbeat"`
+	SessionIdle     string   `mapstructure:"session_idle"`
+	Exclude         []string `mapstructure:"exclude"`
+	Where           []string `mapstructure:"where"`
+}
+
+type QueryConfig struct {
+	Simulator string   `mapstructure:"simulator"`
+	App       string   `mapstructure:"app"`
+	Since     string   `mapstructure:"since"`
+	Limit     int      `mapstructure:"limit"`
+	Exclude   []string `mapstructure:"exclude"`
+	Where     []string `mapstructure:"where"`
+}
+
+type WatchConfig struct {
+	Simulator string `mapstructure:"simulator"`
+	App       string `mapstructure:"app"`
+	Cooldown  string `mapstructure:"cooldown"`
+}
+
 // Default returns a Config with default values
 func Default() *Config {
 	return &Config{
@@ -52,6 +81,18 @@ func Default() *Config {
 			Since:      "5m",
 			Limit:      1000,
 		},
+		Tail: TailConfig{
+			Simulator: "booted",
+		},
+		Query: QueryConfig{
+			Simulator: "booted",
+			Since:     "5m",
+			Limit:     1000,
+		},
+		Watch: WatchConfig{
+			Simulator: "booted",
+			Cooldown:  "5s",
+		},
 	}
 }
 
@@ -63,24 +104,58 @@ func Default() *Config {
 // 4. /etc/xcw/config.yaml
 func Load() (*Config, error) {
 	cfg := Default()
+	v := viper.New()
+
+	// Defaults
+	v.SetDefault("format", cfg.Format)
+	v.SetDefault("level", cfg.Level)
+	v.SetDefault("quiet", cfg.Quiet)
+	v.SetDefault("verbose", cfg.Verbose)
+
+	v.SetDefault("defaults.simulator", cfg.Defaults.Simulator)
+	v.SetDefault("defaults.buffer_size", cfg.Defaults.BufferSize)
+	v.SetDefault("defaults.since", cfg.Defaults.Since)
+	v.SetDefault("defaults.limit", cfg.Defaults.Limit)
+
+	v.SetDefault("tail.simulator", cfg.Tail.Simulator)
+	v.SetDefault("tail.heartbeat", cfg.Tail.Heartbeat)
+	v.SetDefault("tail.summary_interval", cfg.Tail.SummaryInterval)
+	v.SetDefault("tail.session_idle", cfg.Tail.SessionIdle)
+
+	v.SetDefault("query.simulator", cfg.Query.Simulator)
+	v.SetDefault("query.since", cfg.Query.Since)
+	v.SetDefault("query.limit", cfg.Query.Limit)
+
+	v.SetDefault("watch.simulator", cfg.Watch.Simulator)
+	v.SetDefault("watch.cooldown", cfg.Watch.Cooldown)
+
+	// Env overrides
+	v.SetEnvPrefix("XCW")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+	// Common env shortcuts
+	_ = v.BindEnv("defaults.app", "XCW_APP")
+	_ = v.BindEnv("tail.app", "XCW_APP")
+	_ = v.BindEnv("query.app", "XCW_APP")
+	_ = v.BindEnv("watch.app", "XCW_APP")
+	_ = v.BindEnv("defaults.simulator", "XCW_SIMULATOR")
+	_ = v.BindEnv("tail.simulator", "XCW_SIMULATOR")
+	_ = v.BindEnv("query.simulator", "XCW_SIMULATOR")
+	_ = v.BindEnv("watch.simulator", "XCW_SIMULATOR")
 
 	// Try to find and load config file in order of precedence
 	configFile := findConfigFile()
 	if configFile != "" {
-		v := viper.New()
 		v.SetConfigFile(configFile)
 
 		if err := v.ReadInConfig(); err != nil {
 			return nil, err
 		}
-
-		if err := v.Unmarshal(cfg); err != nil {
-			return nil, err
-		}
 	}
 
-	// Override with environment variables
-	applyEnvOverrides(cfg)
+	if err := v.Unmarshal(cfg); err != nil {
+		return nil, err
+	}
 
 	return cfg, nil
 }
@@ -134,28 +209,6 @@ func findConfigFile() string {
 	}
 
 	return ""
-}
-
-// applyEnvOverrides applies environment variable overrides to config
-func applyEnvOverrides(cfg *Config) {
-	if v := os.Getenv("XCW_FORMAT"); v != "" {
-		cfg.Format = v
-	}
-	if v := os.Getenv("XCW_LEVEL"); v != "" {
-		cfg.Level = v
-	}
-	if v := os.Getenv("XCW_QUIET"); v == "true" || v == "1" {
-		cfg.Quiet = true
-	}
-	if v := os.Getenv("XCW_VERBOSE"); v == "true" || v == "1" {
-		cfg.Verbose = true
-	}
-	if v := os.Getenv("XCW_APP"); v != "" {
-		cfg.Defaults.App = v
-	}
-	if v := os.Getenv("XCW_SIMULATOR"); v != "" {
-		cfg.Defaults.Simulator = v
-	}
 }
 
 // LoadFromFile loads configuration from a specific file

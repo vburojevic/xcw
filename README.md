@@ -299,6 +299,42 @@ xcw replay session.ndjson --realtime
 xcw replay session.ndjson --realtime --speed 2.0
 ```
 
+## Configuration & precedence
+
+`xcw` reads settings in this order (highest wins): **CLI flags → environment variables → config file → built-in defaults**. This keeps AI agents predictable when they reuse the same tail session across relaunches.
+
+- **Environment**: prefix every key with `XCW_`. Common shortcuts: `XCW_FORMAT`, `XCW_LEVEL`, `XCW_QUIET`, `XCW_VERBOSE`, `XCW_APP`, `XCW_SIMULATOR`. Nested keys work too: `XCW_TAIL_HEARTBEAT=2s`, `XCW_QUERY_LIMIT=200`, `XCW_WATCH_COOLDOWN=1s`.
+- **Config file locations** (first found is used): `./.xcw.yaml`, `~/.config/xcw/config.yaml`, `/etc/xcw/config.yaml`.
+- **Per-command defaults**: set sticky values without repeating flags:
+
+```yaml
+format: ndjson
+level: debug
+quiet: false
+verbose: false
+
+defaults:
+  simulator: "iPhone 17 Pro"
+  app: com.example.myapp
+  buffer_size: 200
+  since: 5m
+  limit: 2000
+
+tail:
+  heartbeat: 5s
+  summary_interval: 20s
+  session_idle: 60s
+
+query:
+  since: 15m
+  limit: 1500
+
+watch:
+  cooldown: 2s
+```
+
+> Tip for agents: set `XCW_SIMULATOR="iPhone 17 Pro"` and `XCW_APP=<bundle>` once, then rely on config defaults so a relaunch is treated as the same tail session while still emitting `session_start`/`session_end` markers for each new app PID.
+
 ## Background monitoring with tmux
 
 Use the `--tmux` flag with `tail` to keep logs streaming while you do other work.  `xcw` will print a JSON object containing the session name.  Attach to the session at any time using the provided command.
