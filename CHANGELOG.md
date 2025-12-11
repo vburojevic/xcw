@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] - 2025-12-11
+
+### Added
+- Generated machine-readable help (`docs/help.json`) and schema (`schemas/generated.schema.json`) to keep docs in sync.
+
 ## [0.12.0] - 2025-12-11
 
 ### Added
