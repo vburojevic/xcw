@@ -216,37 +216,25 @@ func (c *WatchCmd) Run(globals *Globals) error {
 		}
 	}
 
-	// Compile pattern regex if provided
-	var pattern *regexp.Regexp
-	if c.Pattern != "" {
-		pattern, err = regexp.Compile(c.Pattern)
-		if err != nil {
-			return c.outputError(globals, "INVALID_PATTERN", fmt.Sprintf("invalid regex pattern: %s", err))
-		}
-	}
-
-	// Compile exclude pattern
-	var excludePatterns []*regexp.Regexp
+	// Compile filters (pattern, exclude, where unsupported here)
+	excludeList := []string{}
 	if c.Exclude != "" {
-		excludePattern, err := regexp.Compile(c.Exclude)
-		if err != nil {
-			return c.outputError(globals, "INVALID_EXCLUDE_PATTERN", fmt.Sprintf("invalid exclude pattern: %s", err))
-		}
-		excludePatterns = append(excludePatterns, excludePattern)
+		excludeList = append(excludeList, c.Exclude)
+	}
+	pattern, excludePatterns, _, err := buildFilters(c.Pattern, excludeList, nil)
+	if err != nil {
+		return c.outputError(globals, "INVALID_FILTER", err.Error())
 	}
 
 	// Determine log level (command-specific overrides global)
-	minLevel := globals.Level
-	if c.MinLevel != "" {
-		minLevel = c.MinLevel
-	}
+	minLevel, maxLevel := resolveLevels(c.MinLevel, c.MaxLevel, globals.Level)
 
 	// Create streamer
 	streamer := simulator.NewStreamer(mgr)
 	opts := simulator.StreamOptions{
 		BundleID:          c.App,
-		MinLevel:          domain.ParseLogLevel(minLevel),
-		MaxLevel:          domain.ParseLogLevel(c.MaxLevel),
+		MinLevel:          minLevel,
+		MaxLevel:          maxLevel,
 		Pattern:           pattern,
 		ExcludePatterns:   excludePatterns,
 		ExcludeSubsystems: c.ExcludeSubsystem,

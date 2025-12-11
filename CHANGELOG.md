@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2025-12-11
+
+### Changed
+- `xcw watch` now uses shared filter/level helpers for consistent pattern/exclude handling and min/max level overrides across commands.
+
 ## [0.11.0] - 2025-12-11
 
 ### Added
