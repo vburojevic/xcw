@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -221,13 +220,7 @@ func (c *QueryCmd) Run(globals *Globals) error {
 }
 
 func (c *QueryCmd) outputError(globals *Globals, code, message string) error {
-	if globals.Format == "ndjson" {
-		w := output.NewNDJSONWriter(globals.Stdout)
-		w.WriteError(code, message)
-	} else {
-		fmt.Fprintf(globals.Stderr, "Error [%s]: %s\n", code, message)
-	}
-	return errors.New(message)
+	return outputErrorCommon(globals, code, message)
 }
 
 // parseTimeOrDuration parses a time string as either RFC3339 or a duration offset from now

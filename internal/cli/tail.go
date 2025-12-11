@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -700,13 +699,7 @@ func (c *TailCmd) outputSummary(writer interface {
 }
 
 func (c *TailCmd) outputError(globals *Globals, code, message string) error {
-	if globals.Format == "ndjson" {
-		w := output.NewNDJSONWriter(globals.Stdout)
-		w.WriteError(code, message)
-	} else {
-		fmt.Fprintf(globals.Stderr, "Error [%s]: %s\n", code, message)
-	}
-	return errors.New(message)
+	return outputErrorCommon(globals, code, message)
 }
 
 func generateTailID() string {

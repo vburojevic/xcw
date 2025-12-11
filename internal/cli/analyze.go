@@ -3,7 +3,6 @@ package cli
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -150,11 +149,5 @@ func (c *AnalyzeCmd) Run(globals *Globals) error {
 }
 
 func (c *AnalyzeCmd) outputError(globals *Globals, code, message string) error {
-	if globals.Format == "ndjson" {
-		w := output.NewNDJSONWriter(globals.Stdout)
-		w.WriteError(code, message)
-	} else {
-		fmt.Fprintf(globals.Stderr, "Error [%s]: %s\n", code, message)
-	}
-	return errors.New(message)
+	return outputErrorCommon(globals, code, message)
 }

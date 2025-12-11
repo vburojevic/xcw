@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.3] - 2025-12-11
+
+### Added
+- Common error emitter ensures consistent NDJSON/text error output across commands.
+
+### Changed
+- Cleaned unused imports and standardized flag validation paths using shared helper.
+
 ## [0.11.2] - 2025-12-11
 
 ### Added

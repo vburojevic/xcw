@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/vburojevic/xcw/internal/output"
@@ -49,11 +48,5 @@ func (c *ClearCmd) Run(globals *Globals) error {
 }
 
 func (c *ClearCmd) outputError(globals *Globals, code, message string) error {
-	if globals.Format == "ndjson" {
-		w := output.NewNDJSONWriter(globals.Stdout)
-		w.WriteError(code, message)
-	} else {
-		fmt.Fprintf(globals.Stderr, "Error [%s]: %s\n", code, message)
-	}
-	return errors.New(message)
+	return outputErrorCommon(globals, code, message)
 }

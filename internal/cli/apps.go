@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os/exec"
 	"sort"
@@ -34,15 +33,15 @@ type appInfo struct {
 
 // plistAppInfo is the structure from simctl listapps plist output
 type plistAppInfo struct {
-	ApplicationType      string `plist:"ApplicationType"`
-	Bundle               string `plist:"Bundle"`
-	BundleIdentifier     string `plist:"CFBundleIdentifier"`
-	BundleName           string `plist:"CFBundleName"`
-	BundleDisplayName    string `plist:"CFBundleDisplayName"`
-	BundleVersion        string `plist:"CFBundleVersion"`
-	BundleShortVersion   string `plist:"CFBundleShortVersionString"`
-	Path                 string `plist:"Path"`
-	DataContainer        string `plist:"DataContainer"`
+	ApplicationType    string `plist:"ApplicationType"`
+	Bundle             string `plist:"Bundle"`
+	BundleIdentifier   string `plist:"CFBundleIdentifier"`
+	BundleName         string `plist:"CFBundleName"`
+	BundleDisplayName  string `plist:"CFBundleDisplayName"`
+	BundleVersion      string `plist:"CFBundleVersion"`
+	BundleShortVersion string `plist:"CFBundleShortVersionString"`
+	Path               string `plist:"Path"`
+	DataContainer      string `plist:"DataContainer"`
 }
 
 // Run executes the apps command
@@ -193,11 +192,5 @@ func (c *AppsCmd) getInstalledApps(ctx context.Context, udid string) ([]appInfo,
 }
 
 func (c *AppsCmd) outputError(globals *Globals, code, message string) error {
-	if globals.Format == "ndjson" {
-		w := output.NewNDJSONWriter(globals.Stdout)
-		w.WriteError(code, message)
-	} else {
-		fmt.Fprintf(globals.Stderr, "Error [%s]: %s\n", code, message)
-	}
-	return errors.New(message)
+	return outputErrorCommon(globals, code, message)
 }

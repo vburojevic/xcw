@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -152,11 +151,5 @@ func (c *ReplayCmd) Run(globals *Globals) error {
 }
 
 func (c *ReplayCmd) outputError(globals *Globals, code, message string) error {
-	if globals.Format == "ndjson" {
-		w := output.NewNDJSONWriter(globals.Stdout)
-		w.WriteError(code, message)
-	} else {
-		fmt.Fprintf(globals.Stderr, "Error [%s]: %s\n", code, message)
-	}
-	return errors.New(message)
+	return outputErrorCommon(globals, code, message)
 }

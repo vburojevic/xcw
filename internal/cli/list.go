@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -111,13 +110,7 @@ func (c *ListCmd) outputText(globals *Globals, devices []domain.Device) error {
 }
 
 func (c *ListCmd) outputError(globals *Globals, code, message string) error {
-	if globals.Format == "ndjson" {
-		errOutput := domain.NewErrorOutput(code, message)
-		encoder := json.NewEncoder(globals.Stdout)
-		return encoder.Encode(errOutput)
-	}
-	fmt.Fprintf(globals.Stderr, "Error: %s\n", message)
-	return errors.New(message)
+	return outputErrorCommon(globals, code, message)
 }
 
 func filterByRuntime(devices []domain.Device, runtime string) []domain.Device {

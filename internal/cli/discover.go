@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -263,11 +262,5 @@ func (c *DiscoverCmd) printTextOutput(globals *Globals, d *domain.Discovery) {
 }
 
 func (c *DiscoverCmd) outputError(globals *Globals, code, message string) error {
-	if globals.Format == "ndjson" {
-		w := output.NewNDJSONWriter(globals.Stdout)
-		w.WriteError(code, message)
-	} else {
-		fmt.Fprintf(globals.Stderr, "Error [%s]: %s\n", code, message)
-	}
-	return errors.New(message)
+	return outputErrorCommon(globals, code, message)
 }
