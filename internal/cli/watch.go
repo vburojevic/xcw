@@ -318,7 +318,8 @@ func (c *WatchCmd) Run(globals *Globals) error {
 		case err := <-streamer.Errors():
 			if !globals.Quiet {
 				if globals.Format == "ndjson" {
-					output.NewNDJSONWriter(outputWriter).WriteWarning(err.Error())
+					em := output.NewEmitter(outputWriter)
+					em.WriteWarning(err.Error())
 				} else {
 					fmt.Fprintf(globals.Stderr, "Warning: %s\n", err.Error())
 				}
@@ -336,7 +337,7 @@ func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, ent
 	default:
 		// Too many parallel triggers running, skip this one
 		if globals.Format == "ndjson" {
-			output.NewNDJSONWriter(globals.Stdout).WriteWarning(fmt.Sprintf("trigger skipped (max parallel %d reached): %s", cap(sem), command))
+			output.NewEmitter(globals.Stdout).WriteWarning(fmt.Sprintf("trigger skipped (max parallel %d reached): %s", cap(sem), command))
 		} else if !globals.Quiet {
 			fmt.Fprintf(globals.Stderr, "[TRIGGER SKIPPED] Max parallel triggers reached: %s\n", command)
 		}

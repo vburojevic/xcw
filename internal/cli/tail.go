@@ -338,10 +338,13 @@ func (c *TailCmd) Run(globals *Globals) error {
 		WriteHeartbeat(h *output.Heartbeat) error
 	}
 
+	var emitter *output.Emitter
 	setWriter := func(w io.Writer) {
 		if globals.Format == "ndjson" {
-			writer = output.NewNDJSONWriter(w)
+			emitter = output.NewEmitter(w)
+			writer = emitter
 		} else {
+			emitter = nil
 			writer = output.NewTextWriter(w)
 		}
 	}
@@ -352,14 +355,14 @@ func (c *TailCmd) Run(globals *Globals) error {
 	globals.Debug("Session tracking enabled")
 
 	// Emit metadata for agents
-	if globals.Format == "ndjson" {
-		output.NewNDJSONWriter(outputWriter).WriteMetadata(Version, Commit, "")
+	if emitter != nil {
+		emitter.Metadata(Version, Commit, "")
 	}
 
 	// Emit ready event when --wait-for-launch is used (signals log capture is active)
 	if c.WaitForLaunch {
-		if globals.Format == "ndjson" {
-			output.NewNDJSONWriter(globals.Stdout).WriteReady(
+		if emitter != nil {
+			emitter.Ready(
 				time.Now().UTC().Format(time.RFC3339Nano),
 				device.Name,
 				device.UDID,
@@ -368,7 +371,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 				sessionTracker.CurrentSession(),
 			)
 			if !c.NoAgentHints {
-				output.NewNDJSONWriter(globals.Stdout).WriteAgentHints(tailID, sessionTracker.CurrentSession(), defaultHints())
+				emitter.AgentHints(tailID, sessionTracker.CurrentSession(), defaultHints())
 			}
 		} else {
 			fmt.Fprintf(globals.Stderr, "Ready: log capture active for %s\n", c.App)
@@ -498,9 +501,9 @@ func (c *TailCmd) Run(globals *Globals) error {
 				// Session changed - emit events
 				if sessionChange.EndSession != nil {
 					// Output session end with summary
-					if globals.Format == "ndjson" {
-						output.NewNDJSONWriter(outputWriter).WriteSessionEnd(sessionChange.EndSession)
-						output.NewNDJSONWriter(outputWriter).WriteClearBuffer("session_end", tailID, sessionChange.EndSession.Session)
+					if emitter != nil {
+						emitter.SessionEnd(sessionChange.EndSession)
+						emitter.ClearBuffer("session_end", tailID, sessionChange.EndSession.Session)
 						emitHints()
 					}
 				}
@@ -527,9 +530,9 @@ func (c *TailCmd) Run(globals *Globals) error {
 					}
 
 					// Output JSON session start event
-					if globals.Format == "ndjson" {
-						output.NewNDJSONWriter(outputWriter).WriteSessionStart(sessionChange.StartSession)
-						output.NewNDJSONWriter(outputWriter).WriteClearBuffer("session_start", tailID, sessionChange.StartSession.Session)
+					if emitter != nil {
+						emitter.SessionStart(sessionChange.StartSession)
+						emitter.ClearBuffer("session_start", tailID, sessionChange.StartSession.Session)
 						emitHints()
 					}
 
@@ -588,11 +591,11 @@ func (c *TailCmd) Run(globals *Globals) error {
 
 		case err := <-streamer.Errors():
 			if !globals.Quiet {
-				if globals.Format == "ndjson" {
+				if emitter != nil {
 					if strings.HasPrefix(err.Error(), "reconnect_notice:") {
-						output.NewNDJSONWriter(outputWriter).WriteReconnect(err.Error(), tailID)
+						emitter.WriteReconnect(err.Error(), tailID)
 					} else {
-						output.NewNDJSONWriter(outputWriter).WriteWarning(err.Error())
+						emitter.WriteWarning(err.Error())
 					}
 				} else {
 					fmt.Fprintf(globals.Stderr, "Warning: %s\n", err.Error())
@@ -647,9 +650,9 @@ func (c *TailCmd) Run(globals *Globals) error {
 			if idleTimer != nil {
 				// Emit forced rollover due to idle timeout
 				if sessionChange := sessionTracker.ForceRollover("IDLE_TIMEOUT"); sessionChange != nil {
-					if sessionChange.EndSession != nil && globals.Format == "ndjson" {
-						output.NewNDJSONWriter(outputWriter).WriteSessionEnd(sessionChange.EndSession)
-						output.NewNDJSONWriter(outputWriter).WriteClearBuffer("session_end", tailID, sessionChange.EndSession.Session)
+					if sessionChange.EndSession != nil && emitter != nil {
+						emitter.SessionEnd(sessionChange.EndSession)
+						emitter.ClearBuffer("session_end", tailID, sessionChange.EndSession.Session)
 						emitHints()
 					}
 					if pathBuilder != nil && sessionChange.StartSession != nil {
@@ -659,9 +662,9 @@ func (c *TailCmd) Run(globals *Globals) error {
 						setWriter(outputWriter)
 					}
 					if sessionChange.StartSession != nil {
-						if globals.Format == "ndjson" {
-							output.NewNDJSONWriter(outputWriter).WriteSessionStart(sessionChange.StartSession)
-							output.NewNDJSONWriter(outputWriter).WriteClearBuffer("session_start", tailID, sessionChange.StartSession.Session)
+						if emitter != nil {
+							emitter.SessionStart(sessionChange.StartSession)
+							emitter.ClearBuffer("session_start", tailID, sessionChange.StartSession.Session)
 							emitHints()
 						}
 						if tmuxMgr != nil {
