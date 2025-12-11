@@ -478,8 +478,10 @@ func (c *TailCmd) Run(globals *Globals) error {
 			// Output final summary
 			c.outputSummary(writer, streamer, tailID)
 			if final := sessionTracker.GetFinalSummary(); final != nil {
-				if globals.Format == "ndjson" {
-					output.NewNDJSONWriter(outputWriter).WriteSessionEnd(final)
+				if emitter != nil {
+					emitter.SessionEnd(final)
+					emitter.ClearBuffer("session_end", tailID, final.Session)
+					emitter.Cutoff("sigint", tailID, final.Session, totalLogs)
 				}
 			}
 			return nil
