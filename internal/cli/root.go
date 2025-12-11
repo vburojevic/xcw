@@ -11,12 +11,13 @@ import (
 // CLI is the root command structure for XcodeConsoleWatcher
 type CLI struct {
 	// Global flags
-	Format  string     `short:"f" default:"ndjson" enum:"ndjson,text" help:"Output format"`
-	Level   string     `short:"l" default:"debug" enum:"debug,info,default,error,fault" help:"Minimum log level"`
-	Quiet   bool       `short:"q" help:"Suppress non-log output (only emit log entries)"`
-	Verbose bool       `short:"v" help:"Show debug output (predicates, reconnections, internal state)"`
-	Version VersionCmd `cmd:"" help:"Show version information"`
-	Update  UpdateCmd  `cmd:"" help:"Show how to upgrade xcw"`
+	Format          string     `short:"f" default:"ndjson" enum:"ndjson,text" help:"Output format"`
+	Level           string     `short:"l" default:"debug" enum:"debug,info,default,error,fault" help:"Minimum log level"`
+	Quiet           bool       `short:"q" help:"Suppress non-log output (only emit log entries)"`
+	Verbose         bool       `short:"v" help:"Show debug output (predicates, reconnections, internal state)"`
+	MachineFriendly bool       `help:"Preset for AI agents: ndjson, quiet=false, agent hints on, no prompts"`
+	Version         VersionCmd `cmd:"" help:"Show version information"`
+	Update          UpdateCmd  `cmd:"" help:"Show how to upgrade xcw"`
 
 	// Commands
 	Help       HelpCmd       `cmd:"" help:"Show comprehensive documentation (use --json for AI agents)"`
@@ -34,6 +35,7 @@ type CLI struct {
 	Analyze    AnalyzeCmd    `cmd:"" help:"Analyze a recorded NDJSON log file"`
 	Replay     ReplayCmd     `cmd:"" help:"Replay a recorded NDJSON log file"`
 	Schema     SchemaCmd     `cmd:"" help:"Output JSON Schema for xcw output types"`
+	Handoff    HandoffCmd    `cmd:"" help:"Emit a machine-readable handoff blob for agents"`
 	Config     ConfigCmd     `cmd:"" help:"Show or manage configuration"`
 	Doctor     DoctorCmd     `cmd:"" help:"Check system requirements and configuration"`
 	Completion CompletionCmd `cmd:"" help:"Generate shell completions"`
@@ -54,7 +56,7 @@ type Globals struct {
 
 // NewGlobals creates a new Globals instance from CLI flags
 func NewGlobals(cli *CLI) *Globals {
-	return &Globals{
+	g := &Globals{
 		Format:  cli.Format,
 		Level:   cli.Level,
 		Quiet:   cli.Quiet,
@@ -63,6 +65,11 @@ func NewGlobals(cli *CLI) *Globals {
 		Stderr:  os.Stderr,
 		Config:  config.Default(),
 	}
+	if cli.MachineFriendly {
+		g.Format = "ndjson"
+		// Keep Quiet as provided; agents often want session banners/warnings
+	}
+	return g
 }
 
 // NewGlobalsWithConfig creates a new Globals instance with config fallbacks

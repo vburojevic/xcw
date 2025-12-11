@@ -52,6 +52,9 @@ type TailCmd struct {
 	Where            []string `short:"w" help:"Field filter (e.g., 'level=error', 'message~timeout'). Operators: =, !=, ~, !~, >=, <=, ^, $"`
 	SessionIdle      string   `help:"Emit session boundary after idle period with no logs (e.g., '60s')"`
 	NoAgentHints     bool     `help:"Suppress agent_hints banners (leave off for AI agents)"`
+	DryRunJSON       bool     `help:"Print resolved stream options as JSON and exit (no streaming)"`
+	MaxDuration      string   `help:"Stop after duration (e.g., '5m') emitting session_end (agent-safe cutoff)"`
+	MaxLogs          int      `help:"Stop after N logs emitting session_end (agent-safe cutoff)"`
 }
 
 // Run executes the tail command
@@ -379,9 +382,22 @@ func (c *TailCmd) Run(globals *Globals) error {
 		defer heartbeatTicker.Stop()
 	}
 
+	// Max duration/logs cutoffs
+	var cutoffTimer *time.Timer
+	if c.MaxDuration != "" {
+		dur, err := time.ParseDuration(c.MaxDuration)
+		if err != nil {
+			return c.outputError(globals, "INVALID_MAX_DURATION", fmt.Sprintf("invalid max duration: %s", err))
+		}
+		cutoffTimer = time.NewTimer(dur)
+		defer cutoffTimer.Stop()
+	}
+	var maxLogs = c.MaxLogs
+
 	// Track metrics for heartbeat
 	startTime := time.Now()
 	logsSinceLast := 0
+	lastSeen := time.Now()
 
 	// Parse idle timeout for session rollover
 	var idleTimer *time.Timer
@@ -541,6 +557,13 @@ func (c *TailCmd) Run(globals *Globals) error {
 				return err
 			}
 			logsSinceLast++
+			lastSeen = time.Now()
+			if maxLogs > 0 && logsSinceLast >= maxLogs {
+				if final := sessionTracker.GetFinalSummary(); final != nil && globals.Format == "ndjson" {
+					output.NewNDJSONWriter(outputWriter).WriteSessionEnd(final)
+				}
+				return nil
+			}
 
 		case err := <-streamer.Errors():
 			if !globals.Quiet {
@@ -560,18 +583,31 @@ func (c *TailCmd) Run(globals *Globals) error {
 			c.outputSummary(writer, streamer, tailID)
 
 		case <-func() <-chan time.Time {
+			if cutoffTimer != nil {
+				return cutoffTimer.C
+			}
 			if heartbeatTicker != nil {
 				return heartbeatTicker.C
 			}
 			return nil
 		}():
+			// cutoff takes precedence
+			if cutoffTimer != nil {
+				if final := sessionTracker.GetFinalSummary(); final != nil && globals.Format == "ndjson" {
+					output.NewNDJSONWriter(outputWriter).WriteSessionEnd(final)
+				}
+				return nil
+			}
+
 			heartbeat := &output.Heartbeat{
-				Type:          "heartbeat",
-				SchemaVersion: output.SchemaVersion,
-				Timestamp:     time.Now().Format(time.RFC3339Nano),
-				UptimeSeconds: int64(time.Since(startTime).Seconds()),
-				LogsSinceLast: logsSinceLast,
-				TailID:        tailID,
+				Type:              "heartbeat",
+				SchemaVersion:     output.SchemaVersion,
+				Timestamp:         time.Now().Format(time.RFC3339Nano),
+				UptimeSeconds:     int64(time.Since(startTime).Seconds()),
+				LogsSinceLast:     logsSinceLast,
+				TailID:            tailID,
+				LatestSession:     sessionTracker.CurrentSession(),
+				LastSeenTimestamp: lastSeen.Format(time.RFC3339Nano),
 			}
 			writer.WriteHeartbeat(heartbeat)
 			logsSinceLast = 0

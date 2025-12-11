@@ -10,11 +10,27 @@ import (
 
 // SchemaCmd outputs JSON Schema for xcw output types
 type SchemaCmd struct {
-	Type []string `short:"t" help:"Output types to include (log,summary,heartbeat,error,tmux,info,warning,trigger,doctor,app). Default: all"`
+	Type      []string `short:"t" help:"Output types to include (log,summary,heartbeat,error,tmux,info,warning,trigger,doctor,app). Default: all"`
+	Changelog bool     `help:"Output schema changelog instead of full schema"`
 }
 
 // Run executes the schema command
 func (c *SchemaCmd) Run(globals *Globals) error {
+	if c.Changelog {
+		entries := []map[string]interface{}{
+			{
+				"version":   output.SchemaVersion,
+				"date":      "2025-12-11",
+				"changes":   []string{"Added agent_hints, clear_buffer, tail_id propagation, contract fields on ready/heartbeat"},
+				"breaking":  false,
+				"contracts": []string{"Agents must match tail_id and latest session; reset on clear_buffer/session boundaries"},
+			},
+		}
+		enc := json.NewEncoder(globals.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(entries)
+	}
+
 	schemas := map[string]interface{}{
 		"log":       logSchema(),
 		"summary":   summarySchema(),

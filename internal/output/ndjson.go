@@ -47,6 +47,7 @@ type Heartbeat struct {
 	TailID          string `json:"tail_id,omitempty"`
 	ContractVersion int    `json:"contract_version,omitempty"`
 	LatestSession   int    `json:"latest_session,omitempty"`
+	LastSeenTimestamp string `json:"last_seen_timestamp,omitempty"`
 }
 
 // InfoOutput represents an informational message
