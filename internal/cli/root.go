@@ -35,6 +35,7 @@ type CLI struct {
 	Analyze    AnalyzeCmd    `cmd:"" help:"Analyze a recorded NDJSON log file"`
 	Replay     ReplayCmd     `cmd:"" help:"Replay a recorded NDJSON log file"`
 	Schema     SchemaCmd     `cmd:"" help:"Output JSON Schema for xcw output types"`
+	LogSchema  LogSchemaCmd  `cmd:"" help:"Output minimal log schema for agents"`
 	Handoff    HandoffCmd    `cmd:"" help:"Emit a machine-readable handoff blob for agents"`
 	Config     ConfigCmd     `cmd:"" help:"Show or manage configuration"`
 	Doctor     DoctorCmd     `cmd:"" help:"Check system requirements and configuration"`
@@ -121,6 +122,6 @@ func (v *VersionCmd) Run(globals *Globals) error {
 
 // Version information (set at build time)
 var (
-	Version = "0.8.0"
+	Version = "0.10.0"
 	Commit  = "none"
 )

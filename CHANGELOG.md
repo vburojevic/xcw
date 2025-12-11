@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2025-12-11
+
+### Added
+- Agent-facing NDJSON events: `metadata`, `cutoff_reached`, `reconnect_notice`, `clear_buffer` hints, and enriched `heartbeat` with `last_seen_timestamp`.
+- `--machine-friendly` preset, `handoff` command for AI context handoff, `--dry-run-json` for tail, `--max-duration`/`--max-logs` cutoffs with structured markers.
+
+### Changed
+- Ready/heartbeat timestamps now UTC; tail emits metadata on start.
+
 ## [0.8.0] - 2025-12-10
 
 ### Added
