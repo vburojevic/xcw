@@ -366,6 +366,10 @@
     "summary": {
       "description": "Periodic summary of log statistics",
       "properties": {
+        "tail_id": {
+          "description": "Identifier for the current tail invocation",
+          "type": "string"
+        },
         "debugCount": {
           "description": "Number of debug-level entries",
           "type": "integer"
@@ -432,6 +436,39 @@
         "totalCount"
       ],
       "title": "Log Summary",
+      "type": "object"
+    },
+    "clear_buffer": {
+      "description": "Advises consumers to reset caches at session boundaries",
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "reason": {
+          "description": "Why buffers should be cleared (session_start, session_end, idle_rollover)",
+          "type": "string"
+        },
+        "session": {
+          "description": "Session number associated with the boundary",
+          "type": "integer"
+        },
+        "tail_id": {
+          "description": "Identifier for the current tail invocation",
+          "type": "string"
+        },
+        "type": {
+          "const": "clear_buffer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "reason"
+      ],
+      "title": "Clear Buffer",
       "type": "object"
     },
     "tmux": {

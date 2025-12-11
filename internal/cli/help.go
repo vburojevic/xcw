@@ -12,25 +12,25 @@ type HelpCmd struct {
 
 // HelpOutput is the complete documentation structure
 type HelpOutput struct {
-	Type           string                  `json:"type"`
-	Version        string                  `json:"version"`
-	Purpose        string                  `json:"purpose"`
-	PrimaryCommand string                  `json:"primary_command"`
-	AgentGuidance  string                  `json:"agent_guidance"`
-	QuickStart     map[string]string       `json:"quick_start"`
-	Commands       map[string]CommandDoc   `json:"commands"`
+	Type           string                   `json:"type"`
+	Version        string                   `json:"version"`
+	Purpose        string                   `json:"purpose"`
+	PrimaryCommand string                   `json:"primary_command"`
+	AgentGuidance  string                   `json:"agent_guidance"`
+	QuickStart     map[string]string        `json:"quick_start"`
+	Commands       map[string]CommandDoc    `json:"commands"`
 	OutputTypes    map[string]OutputTypeDoc `json:"output_types"`
-	ErrorCodes     map[string]ErrorCodeDoc `json:"error_codes"`
-	Workflows      []WorkflowDoc           `json:"workflows"`
+	ErrorCodes     map[string]ErrorCodeDoc  `json:"error_codes"`
+	Workflows      []WorkflowDoc            `json:"workflows"`
 }
 
 // CommandDoc documents a single command
 type CommandDoc struct {
-	Description    string       `json:"description"`
-	Usage          string       `json:"usage"`
-	Examples       []ExampleDoc `json:"examples"`
-	OutputTypes    []string     `json:"output_types,omitempty"`
-	RelatedCommands []string    `json:"related_commands,omitempty"`
+	Description     string       `json:"description"`
+	Usage           string       `json:"usage"`
+	Examples        []ExampleDoc `json:"examples"`
+	OutputTypes     []string     `json:"output_types,omitempty"`
+	RelatedCommands []string     `json:"related_commands,omitempty"`
 }
 
 // ExampleDoc is a documented example
@@ -280,6 +280,17 @@ func buildDocumentation() *HelpOutput {
 				},
 				When: "When xcw tail detects the app was relaunched (before session_start)",
 			},
+			"clear_buffer": {
+				Description: "Instructs consumers to reset caches at a session boundary (start/end/idle rollover).",
+				Example: map[string]interface{}{
+					"type":          "clear_buffer",
+					"schemaVersion": 1,
+					"tail_id":       "tail-abc",
+					"session":       2,
+					"reason":        "session_start",
+				},
+				When: "Immediately after session_start/session_end/idle rollover in NDJSON mode",
+			},
 			"tmux": {
 				Description: "Tmux session information when --tmux is used",
 				Example: map[string]interface{}{
@@ -325,10 +336,10 @@ func buildDocumentation() *HelpOutput {
 			"heartbeat": {
 				Description: "Keepalive message for stream health",
 				Example: map[string]interface{}{
-					"type":           "heartbeat",
-					"schemaVersion":  1,
-					"timestamp":      "2024-01-15T10:30:45.123Z",
-					"uptime_seconds": 300,
+					"type":            "heartbeat",
+					"schemaVersion":   1,
+					"timestamp":       "2024-01-15T10:30:45.123Z",
+					"uptime_seconds":  300,
 					"logs_since_last": 42,
 				},
 				When: "Periodically when --heartbeat is used",
@@ -441,17 +452,17 @@ func buildDocumentation() *HelpOutput {
 			},
 		},
 		ErrorCodes: map[string]ErrorCodeDoc{
-			"DEVICE_NOT_FOUND":         {Description: "Simulator not found by name or UDID", Recovery: "Run 'xcw list' to see available simulators"},
-			"NO_BOOTED_SIMULATOR":      {Description: "No booted simulator when --booted used", Recovery: "Boot a simulator in Xcode or use 'xcrun simctl boot'"},
-			"INVALID_FLAGS":            {Description: "--simulator and --booted used together", Recovery: "Use only one of --simulator or --booted"},
-			"INVALID_PATTERN":          {Description: "Regex pattern compilation failed", Recovery: "Check regex syntax"},
-			"INVALID_DURATION":         {Description: "Duration parsing failed", Recovery: "Use format like '5m', '1h', '30s'"},
-			"STREAM_FAILED":            {Description: "Log streaming failed", Recovery: "Check simulator is running and accessible"},
-			"QUERY_FAILED":             {Description: "Historical log query failed", Recovery: "Check simulator is running"},
-			"FILE_NOT_FOUND":           {Description: "Input file not found", Recovery: "Check file path exists"},
-			"TMUX_NOT_INSTALLED":       {Description: "tmux not installed", Recovery: "Install with 'brew install tmux'"},
-			"TMUX_ERROR":               {Description: "tmux operation failed", Recovery: "Check tmux is working: 'tmux list-sessions'"},
-			"LIST_APPS_FAILED":         {Description: "Failed to list apps", Recovery: "Check simulator is booted"},
+			"DEVICE_NOT_FOUND":    {Description: "Simulator not found by name or UDID", Recovery: "Run 'xcw list' to see available simulators"},
+			"NO_BOOTED_SIMULATOR": {Description: "No booted simulator when --booted used", Recovery: "Boot a simulator in Xcode or use 'xcrun simctl boot'"},
+			"INVALID_FLAGS":       {Description: "--simulator and --booted used together", Recovery: "Use only one of --simulator or --booted"},
+			"INVALID_PATTERN":     {Description: "Regex pattern compilation failed", Recovery: "Check regex syntax"},
+			"INVALID_DURATION":    {Description: "Duration parsing failed", Recovery: "Use format like '5m', '1h', '30s'"},
+			"STREAM_FAILED":       {Description: "Log streaming failed", Recovery: "Check simulator is running and accessible"},
+			"QUERY_FAILED":        {Description: "Historical log query failed", Recovery: "Check simulator is running"},
+			"FILE_NOT_FOUND":      {Description: "Input file not found", Recovery: "Check file path exists"},
+			"TMUX_NOT_INSTALLED":  {Description: "tmux not installed", Recovery: "Install with 'brew install tmux'"},
+			"TMUX_ERROR":          {Description: "tmux operation failed", Recovery: "Check tmux is working: 'tmux list-sessions'"},
+			"LIST_APPS_FAILED":    {Description: "Failed to list apps", Recovery: "Check simulator is booted"},
 		},
 		Workflows: []WorkflowDoc{
 			{

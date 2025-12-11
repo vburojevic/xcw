@@ -444,6 +444,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 					// Output session end with summary
 					if globals.Format == "ndjson" {
 						output.NewNDJSONWriter(outputWriter).WriteSessionEnd(sessionChange.EndSession)
+						output.NewNDJSONWriter(outputWriter).WriteClearBuffer("session_end", tailID, sessionChange.EndSession.Session)
 					}
 				}
 
@@ -471,6 +472,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 					// Output JSON session start event
 					if globals.Format == "ndjson" {
 						output.NewNDJSONWriter(outputWriter).WriteSessionStart(sessionChange.StartSession)
+						output.NewNDJSONWriter(outputWriter).WriteClearBuffer("session_start", tailID, sessionChange.StartSession.Session)
 					}
 
 					// Write tmux session banner if in tmux mode
@@ -562,6 +564,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 				if sessionChange := sessionTracker.ForceRollover("IDLE_TIMEOUT"); sessionChange != nil {
 					if sessionChange.EndSession != nil && globals.Format == "ndjson" {
 						output.NewNDJSONWriter(outputWriter).WriteSessionEnd(sessionChange.EndSession)
+						output.NewNDJSONWriter(outputWriter).WriteClearBuffer("session_end", tailID, sessionChange.EndSession.Session)
 					}
 					if pathBuilder != nil && sessionChange.StartSession != nil {
 						if err := openOutput(sessionChange.StartSession.Session); err != nil {
@@ -572,6 +575,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 					if sessionChange.StartSession != nil {
 						if globals.Format == "ndjson" {
 							output.NewNDJSONWriter(outputWriter).WriteSessionStart(sessionChange.StartSession)
+							output.NewNDJSONWriter(outputWriter).WriteClearBuffer("session_start", tailID, sessionChange.StartSession.Session)
 						}
 						if tmuxMgr != nil {
 							var prevSummary *domain.SessionSummary

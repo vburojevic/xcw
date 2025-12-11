@@ -90,6 +90,15 @@ type TriggerErrorOutput struct {
 	Error         string `json:"error"`
 }
 
+// ClearBufferOutput instructs consumers to discard cached state at session boundaries
+type ClearBufferOutput struct {
+	Type          string `json:"type"` // Always "clear_buffer"
+	SchemaVersion int    `json:"schemaVersion"`
+	Reason        string `json:"reason"`
+	TailID        string `json:"tail_id,omitempty"`
+	Session       int    `json:"session,omitempty"`
+}
+
 // ReadyOutput signals that log capture is active and ready
 type ReadyOutput struct {
 	Type          string `json:"type"` // Always "ready"
@@ -213,6 +222,17 @@ func (w *NDJSONWriter) WriteReady(timestamp, simulator, udid, app string) error 
 		Simulator:     simulator,
 		UDID:          udid,
 		App:           app,
+	})
+}
+
+// WriteClearBuffer emits a cache/reset hint
+func (w *NDJSONWriter) WriteClearBuffer(reason string, tailID string, session int) error {
+	return w.encoder.Encode(&ClearBufferOutput{
+		Type:          "clear_buffer",
+		SchemaVersion: SchemaVersion,
+		Reason:        reason,
+		TailID:        tailID,
+		Session:       session,
 	})
 }
 

@@ -398,6 +398,13 @@ This allows AI agents to keep `xcw tail` running continuously while you rebuild 
 
 **Recording to files:** When you use `--output` or `--session-dir`, `xcw` now rotates to a fresh file on every app relaunch or idle rollover (one file per run). Filenames include the session number when you provide `--output`, or a new timestamped file is created when using `--session-dir`.
 
+**Agent contract (do this!):**
+1. Track the latest `session_start` and only process logs whose `session` equals that value.
+2. Also require `tail_id` to match the current tail invocation; drop events from other tails.
+3. On `session_start`, `session_end`, or `clear_buffer`, reset any caches (dedupe/pattern memory) before continuing.
+4. When recording to disk, read only the newest rotated file unless explicitly comparing runs.
+5. Use older sessions/files only when you are asked to compare behavior across runs.
+
 ## Output format & JSON schema
 
 By default `xcw` writes NDJSON to stdout.  Each event includes a `type` and `schemaVersion` field.  Types include `log`, `console`, `ready`, `summary`, `analysis`, `heartbeat`, `error`, `info`, `warning`, `tmux`, `trigger`, `app`, `doctor`, `pick`, `session`, `session_start` and `session_end`.  The current schema version is `1`.
