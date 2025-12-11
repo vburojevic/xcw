@@ -33,6 +33,16 @@ func ParseWhereClause(clause string) (*WhereClause, error) {
 				return nil, fmt.Errorf("invalid where clause: %s", clause)
 			}
 
+			// Support quoted values so operators can appear in value.
+			if (strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"")) ||
+				(strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'")) {
+				unq, err := strconv.Unquote(value)
+				if err != nil {
+					return nil, fmt.Errorf("invalid quoted value in where clause '%s': %w", clause, err)
+				}
+				value = unq
+			}
+
 			wc := &WhereClause{
 				Field:    field,
 				Operator: op,
@@ -62,8 +72,22 @@ func (wc *WhereClause) Match(entry *domain.LogEntry) bool {
 
 	switch wc.Operator {
 	case "=":
+		// Case-insensitive level equality
+		if strings.ToLower(wc.Field) == "level" {
+			return entry.Level == domain.ParseLogLevel(wc.Value)
+		}
+		// Numeric equality for pid/tid
+		if strings.ToLower(wc.Field) == "pid" || strings.ToLower(wc.Field) == "tid" {
+			return wc.compareNumeric(entry, true, true)
+		}
 		return fieldValue == wc.Value
 	case "!=":
+		if strings.ToLower(wc.Field) == "level" {
+			return entry.Level != domain.ParseLogLevel(wc.Value)
+		}
+		if strings.ToLower(wc.Field) == "pid" || strings.ToLower(wc.Field) == "tid" {
+			return wc.compareNumeric(entry, false, true)
+		}
 		return fieldValue != wc.Value
 	case "~": // Contains (regex)
 		if wc.regex != nil {
@@ -80,9 +104,15 @@ func (wc *WhereClause) Match(entry *domain.LogEntry) bool {
 	case "$": // Ends with
 		return strings.HasSuffix(fieldValue, wc.Value)
 	case ">=": // Greater or equal (for levels)
-		return wc.compareLevel(entry, true)
+		if strings.ToLower(wc.Field) == "level" {
+			return wc.compareLevel(entry, true)
+		}
+		return wc.compareNumeric(entry, true, false)
 	case "<=": // Less or equal (for levels)
-		return wc.compareLevel(entry, false)
+		if strings.ToLower(wc.Field) == "level" {
+			return wc.compareLevel(entry, false)
+		}
+		return wc.compareNumeric(entry, false, false)
 	}
 
 	return false
@@ -103,6 +133,8 @@ func (wc *WhereClause) getFieldValue(entry *domain.LogEntry) string {
 		return entry.Message
 	case "pid":
 		return strconv.Itoa(entry.PID)
+	case "tid":
+		return strconv.Itoa(entry.TID)
 	default:
 		return ""
 	}
@@ -122,6 +154,38 @@ func (wc *WhereClause) compareLevel(entry *domain.LogEntry, greaterOrEqual bool)
 		return entryPriority >= targetPriority
 	}
 	return entryPriority <= targetPriority
+}
+
+// compareNumeric handles integer comparisons for pid/tid.
+// If equality is true, greaterOrEqual indicates equality vs inequality for = / !=.
+func (wc *WhereClause) compareNumeric(entry *domain.LogEntry, greaterOrEqual bool, equality bool) bool {
+	field := strings.ToLower(wc.Field)
+	var entryVal int
+	switch field {
+	case "pid":
+		entryVal = entry.PID
+	case "tid":
+		entryVal = entry.TID
+	default:
+		return false
+	}
+
+	targetVal, err := strconv.Atoi(wc.Value)
+	if err != nil {
+		return false
+	}
+
+	if equality {
+		if greaterOrEqual {
+			return entryVal == targetVal
+		}
+		return entryVal != targetVal
+	}
+
+	if greaterOrEqual {
+		return entryVal >= targetVal
+	}
+	return entryVal <= targetVal
 }
 
 // WhereFilter is a filter that applies multiple where clauses (AND logic)

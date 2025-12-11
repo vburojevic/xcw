@@ -1,9 +1,11 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -157,6 +159,10 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
 }
 
@@ -226,7 +232,71 @@ func LoadFromFile(path string) (*Config, error) {
 		return nil, err
 	}
 
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+// Validate checks config values for basic correctness.
+func (c *Config) Validate() error {
+	if c == nil {
+		return nil
+	}
+
+	// Validate global enums
+	switch strings.ToLower(c.Format) {
+	case "", "ndjson", "text":
+	default:
+		return fmt.Errorf("invalid format: %q (expected ndjson or text)", c.Format)
+	}
+	switch strings.ToLower(c.Level) {
+	case "", "debug", "info", "default", "error", "fault":
+	default:
+		return fmt.Errorf("invalid level: %q (expected debug, info, default, error, fault)", c.Level)
+	}
+
+	checkDuration := func(name, val string) error {
+		if val == "" {
+			return nil
+		}
+		if _, err := time.ParseDuration(val); err != nil {
+			return fmt.Errorf("invalid duration for %s: %q (%v)", name, val, err)
+		}
+		return nil
+	}
+
+	if err := checkDuration("defaults.since", c.Defaults.Since); err != nil {
+		return err
+	}
+	if err := checkDuration("tail.heartbeat", c.Tail.Heartbeat); err != nil {
+		return err
+	}
+	if err := checkDuration("tail.summary_interval", c.Tail.SummaryInterval); err != nil {
+		return err
+	}
+	if err := checkDuration("tail.session_idle", c.Tail.SessionIdle); err != nil {
+		return err
+	}
+	if err := checkDuration("query.since", c.Query.Since); err != nil {
+		return err
+	}
+	if err := checkDuration("watch.cooldown", c.Watch.Cooldown); err != nil {
+		return err
+	}
+
+	if c.Defaults.BufferSize < 0 {
+		return fmt.Errorf("defaults.buffer_size must be >= 0")
+	}
+	if c.Defaults.Limit < 0 {
+		return fmt.Errorf("defaults.limit must be >= 0")
+	}
+	if c.Query.Limit < 0 {
+		return fmt.Errorf("query.limit must be >= 0")
+	}
+
+	return nil
 }
 
 // ConfigFile returns the path to the config file that would be loaded

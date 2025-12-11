@@ -1,6 +1,8 @@
 module github.com/vburojevic/xcw
 
-go 1.25.5
+go 1.25
+
+toolchain go1.25.5
 
 require (
 	github.com/GianlucaP106/gotmux v0.5.0
@@ -11,7 +13,6 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/mattn/go-isatty v0.0.20
 	github.com/olekukonko/tablewriter v1.1.2
-	github.com/samber/lo v1.52.0
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.27.1

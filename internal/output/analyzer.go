@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/samber/lo"
 	"github.com/vburojevic/xcw/internal/domain"
 )
 
@@ -114,48 +113,61 @@ func (a *Analyzer) normalizeMessage(msg string) string {
 
 // getTopMessages returns the top N messages by frequency
 func (a *Analyzer) getTopMessages(counts map[string]int, limit int) []string {
-	// Convert map to slice of entries and sort by count
-	entries := lo.Entries(counts)
+	type kv struct {
+		Key   string
+		Value int
+	}
+	entries := make([]kv, 0, len(counts))
+	for k, v := range counts {
+		entries = append(entries, kv{Key: k, Value: v})
+	}
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].Value > entries[j].Value
 	})
-
-	// Take top N and extract just the keys
-	topEntries := lo.Slice(entries, 0, limit)
-	return lo.Map(topEntries, func(e lo.Entry[string, int], _ int) string {
-		return e.Key
-	})
+	if len(entries) > limit {
+		entries = entries[:limit]
+	}
+	top := make([]string, len(entries))
+	for i, e := range entries {
+		top[i] = e.Key
+	}
+	return top
 }
 
 // DetectPatterns finds recurring error patterns
 func (a *Analyzer) DetectPatterns(entries []domain.LogEntry) []PatternMatch {
 	// Filter to only error/fault entries
-	errorEntries := lo.Filter(entries, func(e domain.LogEntry, _ int) bool {
-		return e.Level == domain.LogLevelError || e.Level == domain.LogLevelFault
-	})
+	errorEntries := make([]domain.LogEntry, 0, len(entries))
+	for _, e := range entries {
+		if e.Level == domain.LogLevelError || e.Level == domain.LogLevelFault {
+			errorEntries = append(errorEntries, e)
+		}
+	}
 
 	// Group similar error messages by normalized pattern
-	errorGroups := lo.GroupBy(errorEntries, func(e domain.LogEntry) string {
-		return a.normalizeMessage(e.Message)
-	})
+	errorGroups := make(map[string][]domain.LogEntry)
+	for _, e := range errorEntries {
+		key := a.normalizeMessage(e.Message)
+		errorGroups[key] = append(errorGroups[key], e)
+	}
 
 	// Convert to PatternMatch slice, filtering those with >= 2 occurrences
-	patterns := lo.FilterMap(lo.Entries(errorGroups), func(e lo.Entry[string, []domain.LogEntry], _ int) (PatternMatch, bool) {
-		if len(e.Value) < 2 {
-			return PatternMatch{}, false
+	patterns := make([]PatternMatch, 0)
+	for key, group := range errorGroups {
+		if len(group) < 2 {
+			continue
 		}
-
 		// Get message samples (max 3)
-		samples := lo.Map(lo.Slice(e.Value, 0, 3), func(entry domain.LogEntry, _ int) string {
-			return entry.Message
-		})
-
-		return PatternMatch{
-			Pattern: e.Key,
-			Count:   len(e.Value),
+		samples := make([]string, 0, 3)
+		for i := 0; i < len(group) && i < 3; i++ {
+			samples = append(samples, group[i].Message)
+		}
+		patterns = append(patterns, PatternMatch{
+			Pattern: key,
+			Count:   len(group),
 			Samples: samples,
-		}, true
-	})
+		})
+	}
 
 	// Sort by frequency (descending)
 	sort.Slice(patterns, func(i, j int) bool {
@@ -163,7 +175,10 @@ func (a *Analyzer) DetectPatterns(entries []domain.LogEntry) []PatternMatch {
 	})
 
 	// Return top 5 patterns
-	return lo.Slice(patterns, 0, 5)
+	if len(patterns) > 5 {
+		patterns = patterns[:5]
+	}
+	return patterns
 }
 
 // PatternMatch represents a detected error pattern

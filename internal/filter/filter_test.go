@@ -408,17 +408,44 @@ func TestWhereClauseMatch(t *testing.T) {
 		assert.False(t, wc.Match(entry2))
 	})
 
-	t.Run("ends with", func(t *testing.T) {
-		wc, _ := ParseWhereClause("message$failed")
-		entry := &domain.LogEntry{Message: "Connection failed"}
-		assert.True(t, wc.Match(entry))
+		t.Run("ends with", func(t *testing.T) {
+			wc, _ := ParseWhereClause("message$failed")
+			entry := &domain.LogEntry{Message: "Connection failed"}
+			assert.True(t, wc.Match(entry))
 
-		entry2 := &domain.LogEntry{Message: "Success"}
-		assert.False(t, wc.Match(entry2))
-	})
+			entry2 := &domain.LogEntry{Message: "Success"}
+			assert.False(t, wc.Match(entry2))
+		})
 
-	t.Run("greater or equal level", func(t *testing.T) {
-		wc, _ := ParseWhereClause("level>=error")
+		t.Run("numeric pid comparisons", func(t *testing.T) {
+			wc, _ := ParseWhereClause("pid>=100")
+			entry := &domain.LogEntry{PID: 120}
+			assert.True(t, wc.Match(entry))
+			entry2 := &domain.LogEntry{PID: 80}
+			assert.False(t, wc.Match(entry2))
+
+			wcEq, _ := ParseWhereClause("pid=120")
+			assert.True(t, wcEq.Match(entry))
+			assert.False(t, wcEq.Match(entry2))
+		})
+
+		t.Run("numeric tid comparisons", func(t *testing.T) {
+			wc, _ := ParseWhereClause("tid<=5")
+			entry := &domain.LogEntry{TID: 3}
+			assert.True(t, wc.Match(entry))
+			entry2 := &domain.LogEntry{TID: 7}
+			assert.False(t, wc.Match(entry2))
+		})
+
+		t.Run("quoted where values", func(t *testing.T) {
+			wc, err := ParseWhereClause(`message~"foo=bar"`)
+			require.NoError(t, err)
+			entry := &domain.LogEntry{Message: "foo=bar baz"}
+			assert.True(t, wc.Match(entry))
+		})
+
+		t.Run("greater or equal level", func(t *testing.T) {
+			wc, _ := ParseWhereClause("level>=error")
 
 		assert.True(t, wc.Match(&domain.LogEntry{Level: domain.LogLevelError}))
 		assert.True(t, wc.Match(&domain.LogEntry{Level: domain.LogLevelFault}))

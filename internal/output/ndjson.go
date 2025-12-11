@@ -90,6 +90,15 @@ type CutoffOutput struct {
 	TotalLogs     int    `json:"total_logs,omitempty"`
 }
 
+// RotationOutput describes a file rotation event for agents.
+type RotationOutput struct {
+	Type          string `json:"type"` // Always "rotation"
+	SchemaVersion int    `json:"schemaVersion"`
+	Path          string `json:"path"`
+	TailID        string `json:"tail_id,omitempty"`
+	Session       int    `json:"session,omitempty"`
+}
+
 // ReconnectNotice signals a stream reconnect
 type ReconnectNotice struct {
 	Type          string `json:"type"` // Always "reconnect_notice"
@@ -268,6 +277,17 @@ func (w *NDJSONWriter) WriteCutoff(reason, tailID string, session, total int) er
 		TailID:        tailID,
 		Session:       session,
 		TotalLogs:     total,
+	})
+}
+
+// WriteRotation outputs a rotation event indicating the active output file path.
+func (w *NDJSONWriter) WriteRotation(path, tailID string, session int) error {
+	return w.encoder.Encode(&RotationOutput{
+		Type:          "rotation",
+		SchemaVersion: SchemaVersion,
+		Path:          path,
+		TailID:        tailID,
+		Session:       session,
 	})
 }
 

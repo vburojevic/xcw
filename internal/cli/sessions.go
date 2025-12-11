@@ -3,7 +3,6 @@ package cli
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -86,12 +85,7 @@ func (c *SessionsListCmd) Run(globals *Globals) error {
 }
 
 func (c *SessionsListCmd) outputError(globals *Globals, code, message string) error {
-	if globals.Format == "ndjson" {
-		output.NewNDJSONWriter(globals.Stdout).WriteError(code, message)
-	} else {
-		fmt.Fprintf(globals.Stderr, "Error [%s]: %s\n", code, message)
-	}
-	return errors.New(message)
+	return outputErrorCommon(globals, code, message)
 }
 
 // SessionsShowCmd shows the path to a session file
@@ -152,12 +146,7 @@ func (c *SessionsShowCmd) Run(globals *Globals) error {
 }
 
 func (c *SessionsShowCmd) outputError(globals *Globals, code, message string) error {
-	if globals.Format == "ndjson" {
-		output.NewNDJSONWriter(globals.Stdout).WriteError(code, message)
-	} else {
-		fmt.Fprintf(globals.Stderr, "Error [%s]: %s\n", code, message)
-	}
-	return errors.New(message)
+	return outputErrorCommon(globals, code, message)
 }
 
 // SessionsCleanCmd deletes old session files
@@ -232,12 +221,7 @@ func (c *SessionsCleanCmd) Run(globals *Globals) error {
 }
 
 func (c *SessionsCleanCmd) outputError(globals *Globals, code, message string) error {
-	if globals.Format == "ndjson" {
-		output.NewNDJSONWriter(globals.Stdout).WriteError(code, message)
-	} else {
-		fmt.Fprintf(globals.Stderr, "Error [%s]: %s\n", code, message)
-	}
-	return errors.New(message)
+	return outputErrorCommon(globals, code, message)
 }
 
 // SessionOutput is the NDJSON output format for session info

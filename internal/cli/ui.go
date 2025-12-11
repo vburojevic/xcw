@@ -84,17 +84,18 @@ func (c *UICmd) Run(globals *Globals) error {
 
 	// Create streamer
 	streamer := simulator.NewStreamer(mgr)
-	opts := simulator.StreamOptions{
-		BundleID:          c.App,
-		Subsystems:        c.Subsystem,
-		Categories:        c.Category,
-		MinLevel:          domain.ParseLogLevel(globals.Level),
-		Pattern:           pattern,
-		ExcludePatterns:   excludePatterns,
-		ExcludeSubsystems: c.ExcludeSubsystem,
-		BufferSize:        c.BufferSize,
-		RawPredicate:      c.Predicate,
-	}
+		opts := simulator.StreamOptions{
+			BundleID:          c.App,
+			Subsystems:        c.Subsystem,
+			Categories:        c.Category,
+			MinLevel:          domain.ParseLogLevel(globals.Level),
+			Pattern:           pattern,
+			ExcludePatterns:   excludePatterns,
+			ExcludeSubsystems: c.ExcludeSubsystem,
+			BufferSize:        c.BufferSize,
+			RawPredicate:      c.Predicate,
+			Verbose:           globals.Verbose,
+		}
 
 	globals.Debug("Starting log stream for TUI...")
 	if err := streamer.Start(ctx, device.UDID, opts); err != nil {

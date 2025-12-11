@@ -13,10 +13,16 @@ import (
 	"github.com/vburojevic/xcw/internal/output"
 )
 
+var (
+	detailStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	highlightStyle = lipgloss.NewStyle().Background(lipgloss.Color("57")).Foreground(lipgloss.Color("230")).Bold(true)
+)
+
 // Model represents the TUI state
 type Model struct {
 	logs        []domain.LogEntry
 	filteredIdx []int
+	content     string
 	viewport    viewport.Model
 	textinput   textinput.Model
 	logChan     <-chan domain.LogEntry
@@ -28,6 +34,8 @@ type Model struct {
 	searchQuery string
 	levelFilter domain.LogLevel
 	paused      bool
+	follow      bool
+	showDetails bool
 	stats       Stats
 	appName     string
 	simName     string
@@ -56,16 +64,17 @@ func New(appName, simName string, logChan <-chan domain.LogEntry, errChan <-chan
 	ti.CharLimit = 100
 	ti.Width = 40
 
-	return Model{
-		logs:        make([]domain.LogEntry, 0, 1000),
-		filteredIdx: make([]int, 0, 1000),
-		textinput:   ti,
-		logChan:     logChan,
-		errChan:     errChan,
-		levelFilter: domain.LogLevelDebug, // Show all by default
-		appName:     appName,
-		simName:     simName,
-	}
+		return Model{
+			logs:        make([]domain.LogEntry, 0, 1000),
+			filteredIdx: make([]int, 0, 1000),
+			textinput:   ti,
+			logChan:     logChan,
+			errChan:     errChan,
+			levelFilter: domain.LogLevelDebug, // Show all by default
+			follow:      true,
+			appName:     appName,
+			simName:     simName,
+		}
 }
 
 // Init initializes the model
@@ -116,13 +125,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textinput.SetValue("")
 					m.updateFilter()
 				}
-			case "p", " ":
-				m.paused = !m.paused
-			case "c":
-				m.logs = m.logs[:0]
-				m.filteredIdx = m.filteredIdx[:0]
-				m.stats = Stats{}
-				m.updateViewport()
+				case "p", " ":
+					m.paused = !m.paused
+				case "f":
+					m.follow = !m.follow
+					if m.follow {
+						m.viewport.GotoBottom()
+					}
+				case "d":
+					m.showDetails = !m.showDetails
+					m.updateFilter()
+				case "c":
+					m.logs = m.logs[:0]
+					m.filteredIdx = m.filteredIdx[:0]
+					m.stats = Stats{}
+					m.content = ""
+					m.updateViewport()
 			case "1":
 				m.levelFilter = domain.LogLevelDebug
 				m.updateFilter()
@@ -171,36 +189,49 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.updateViewport()
 
-	case LogMsg:
-		if !m.paused {
-			entry := domain.LogEntry(msg)
-			m.logs = append(m.logs, entry)
-			m.stats.Total++
-			if entry.Level == domain.LogLevelError {
-				m.stats.Errors++
-			} else if entry.Level == domain.LogLevelFault {
-				m.stats.Faults++
-			}
+		case LogMsg:
+			if !m.paused {
+				entry := domain.LogEntry(msg)
+				m.logs = append(m.logs, entry)
+				m.stats.Total++
+				if entry.Level == domain.LogLevelError {
+					m.stats.Errors++
+				} else if entry.Level == domain.LogLevelFault {
+					m.stats.Faults++
+				}
 
-			// Keep only last 10000 logs
-			if len(m.logs) > 10000 {
-				m.logs = m.logs[1000:]
-				m.stats.Total = len(m.logs)
-				// Recount errors/faults
-				m.stats.Errors = 0
-				m.stats.Faults = 0
-				for _, l := range m.logs {
-					if l.Level == domain.LogLevelError {
-						m.stats.Errors++
-					} else if l.Level == domain.LogLevelFault {
-						m.stats.Faults++
+				// Keep only last 10000 logs
+				if len(m.logs) > 10000 {
+					m.logs = m.logs[1000:]
+					m.stats.Total = len(m.logs)
+					// Recount errors/faults
+					m.stats.Errors = 0
+					m.stats.Faults = 0
+					for _, l := range m.logs {
+						if l.Level == domain.LogLevelError {
+							m.stats.Errors++
+						} else if l.Level == domain.LogLevelFault {
+							m.stats.Faults++
+						}
+					}
+					// Full recompute since indices shifted
+					m.updateFilter()
+				} else {
+					// Incremental filter/update for new entry
+					query := strings.ToLower(m.searchQuery)
+					if m.entryMatches(entry, query) {
+						m.filteredIdx = append(m.filteredIdx, len(m.logs)-1)
+						line := m.formatLogLine(entry)
+						if m.content == "" {
+							m.content = line
+						} else {
+							m.content += "\n" + line
+						}
+						m.updateViewport()
 					}
 				}
 			}
-
-			m.updateFilter()
-		}
-		cmds = append(cmds, waitForLog(m.logChan))
+			cmds = append(cmds, waitForLog(m.logChan))
 
 	case ErrMsg:
 		// Handle error (could show in status bar)
@@ -249,6 +280,9 @@ func (m *Model) renderHeader() string {
 	if m.paused {
 		title += " [PAUSED]"
 	}
+	if !m.follow {
+		title += " [NO-FOLLOW]"
+	}
 
 	// Stats
 	statsStr := fmt.Sprintf("Total: %d | Errors: %d | Faults: %d",
@@ -293,36 +327,27 @@ func (m *Model) renderFooter() string {
 		Foreground(lipgloss.Color("244")).
 		Width(m.width)
 
-	help := "q:quit / :search 1-5:level p:pause c:clear g/G:top/bottom j/k:scroll"
+	help := "q:quit /:search 1-5:level p:pause f:follow d:details c:clear g/G:top/bottom j/k:scroll"
 	return helpStyle.Render(help)
 }
 
 func (m *Model) updateFilter() {
 	m.filteredIdx = m.filteredIdx[:0]
 	query := strings.ToLower(m.searchQuery)
+	var b strings.Builder
 
 	for i, log := range m.logs {
-		// Level filter
-		if log.Level.Priority() < m.levelFilter.Priority() {
+		if !m.entryMatches(log, query) {
 			continue
 		}
-
-		// Search filter
-		if query != "" {
-			msgLower := strings.ToLower(log.Message)
-			processLower := strings.ToLower(log.Process)
-			subsystemLower := strings.ToLower(log.Subsystem)
-
-			if !strings.Contains(msgLower, query) &&
-				!strings.Contains(processLower, query) &&
-				!strings.Contains(subsystemLower, query) {
-				continue
-			}
-		}
-
 		m.filteredIdx = append(m.filteredIdx, i)
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(m.formatLogLine(log))
 	}
 
+	m.content = b.String()
 	m.updateViewport()
 }
 
@@ -331,20 +356,28 @@ func (m *Model) updateViewport() {
 		return
 	}
 
-	var lines []string
-	for _, idx := range m.filteredIdx {
-		log := m.logs[idx]
-		line := m.formatLogLine(log)
-		lines = append(lines, line)
-	}
+	m.viewport.SetContent(m.content)
 
-	content := strings.Join(lines, "\n")
-	m.viewport.SetContent(content)
-
-	// Auto-scroll to bottom if not paused
-	if !m.paused {
+	// Auto-scroll to bottom when follow mode is on
+	if m.follow {
 		m.viewport.GotoBottom()
 	}
+}
+
+// entryMatches applies current level/search filters for a single entry.
+func (m *Model) entryMatches(log domain.LogEntry, query string) bool {
+	if log.Level.Priority() < m.levelFilter.Priority() {
+		return false
+	}
+	if query == "" {
+		return true
+	}
+	msgLower := strings.ToLower(log.Message)
+	processLower := strings.ToLower(log.Process)
+	subsystemLower := strings.ToLower(log.Subsystem)
+	return strings.Contains(msgLower, query) ||
+		strings.Contains(processLower, query) ||
+		strings.Contains(subsystemLower, query)
 }
 
 func (m *Model) formatLogLine(entry domain.LogEntry) string {
@@ -372,7 +405,16 @@ func (m *Model) formatLogLine(entry domain.LogEntry) string {
 		msg = msg[:maxMsgLen-3] + "..."
 	}
 
-	line := timeStyle.Render(timeStr) + " " + levelIndicator + " " + processStr + " "
+	// Highlight search hits in message when searching
+	if m.searchQuery != "" {
+		msg = highlight(msg, m.searchQuery)
+	}
+
+	line := timeStyle.Render(timeStr) + " " + levelIndicator + " " + processStr
+	if m.showDetails {
+		line += " " + detailStyle.Render(fmt.Sprintf("pid:%d", entry.PID))
+	}
+	line += " "
 
 	if entry.Subsystem != "" {
 		subsystemStyle := output.Styles.Subsystem
@@ -386,6 +428,27 @@ func (m *Model) formatLogLine(entry domain.LogEntry) string {
 	line += msgStyle.Render(msg)
 
 	return line
+}
+
+func highlight(s, query string) string {
+	if query == "" || s == "" {
+		return s
+	}
+	qs := strings.ToLower(query)
+	ls := strings.ToLower(s)
+	var b strings.Builder
+	for {
+		idx := strings.Index(ls, qs)
+		if idx < 0 {
+			b.WriteString(s)
+			break
+		}
+		b.WriteString(s[:idx])
+		b.WriteString(highlightStyle.Render(s[idx : idx+len(query)]))
+		s = s[idx+len(query):]
+		ls = ls[idx+len(query):]
+	}
+	return b.String()
 }
 
 // waitForLog creates a command that waits for a log entry

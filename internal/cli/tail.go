@@ -142,15 +142,17 @@ func (c *TailCmd) Run(globals *Globals) error {
 		if bw != nil {
 			outputWriter = bw
 		}
-		if !globals.Quiet && path != "" {
-			if globals.Format == "ndjson" {
-				output.NewNDJSONWriter(globals.Stdout).WriteInfo(
-					fmt.Sprintf("Writing logs to %s", path),
-					device.Name, device.UDID, "", "")
-			} else {
-				fmt.Fprintf(globals.Stderr, "Writing logs to %s\n", path)
+			if !globals.Quiet && path != "" {
+				if globals.Format == "ndjson" {
+					w := output.NewNDJSONWriter(globals.Stdout)
+					w.WriteInfo(
+						fmt.Sprintf("Writing logs to %s", path),
+						device.Name, device.UDID, "", "")
+					_ = w.WriteRotation(path, tailID, sessionNum)
+				} else {
+					fmt.Fprintf(globals.Stderr, "Writing logs to %s\n", path)
+				}
 			}
-		}
 		return nil
 	}
 
@@ -177,28 +179,22 @@ func (c *TailCmd) Run(globals *Globals) error {
 		}
 		globals.Debug("Tmux session name: %s", sessionName)
 
-		if !tmux.IsTmuxAvailable() {
-			if !globals.Quiet {
-				fmt.Fprintln(globals.Stderr, "Warning: tmux not installed, falling back to stdout")
-			}
-		} else {
+			if !tmux.IsTmuxAvailable() {
+				emitWarning(globals, output.NewEmitter(globals.Stdout), "tmux not installed, falling back to stdout")
+			} else {
 			cfg := &tmux.Config{
 				SessionName:   sessionName,
 				SimulatorName: device.Name,
 				Detached:      true,
 			}
 
-			tmuxMgr, err = tmux.NewManager(cfg)
-			if err != nil {
-				if !globals.Quiet {
-					fmt.Fprintf(globals.Stderr, "Warning: failed to create tmux session: %v, falling back to stdout\n", err)
-				}
-			} else {
-				if err := tmuxMgr.GetOrCreateSession(); err != nil {
-					if !globals.Quiet {
-						fmt.Fprintf(globals.Stderr, "Warning: failed to setup tmux session: %v, falling back to stdout\n", err)
-					}
+				tmuxMgr, err = tmux.NewManager(cfg)
+				if err != nil {
+					emitWarning(globals, output.NewEmitter(globals.Stdout), fmt.Sprintf("failed to create tmux session: %v, falling back to stdout", err))
 				} else {
+					if err := tmuxMgr.GetOrCreateSession(); err != nil {
+						emitWarning(globals, output.NewEmitter(globals.Stdout), fmt.Sprintf("failed to setup tmux session: %v, falling back to stdout", err))
+					} else {
 					// Successfully created tmux session
 					outputWriter = tmux.NewWriter(tmuxMgr)
 
@@ -249,19 +245,20 @@ func (c *TailCmd) Run(globals *Globals) error {
 
 	// Create streamer
 	streamer := simulator.NewStreamer(mgr)
-	opts := simulator.StreamOptions{
-		BundleID:          c.App,
-		Subsystems:        c.Subsystem,
-		Categories:        c.Category,
-		Processes:         c.Process,
-		MinLevel:          minLevel,
-		MaxLevel:          maxLevel,
-		Pattern:           pattern,
-		ExcludePatterns:   excludePatterns,
-		ExcludeSubsystems: c.ExcludeSubsystem,
-		BufferSize:        c.BufferSize,
-		RawPredicate:      c.Predicate,
-	}
+		opts := simulator.StreamOptions{
+			BundleID:          c.App,
+			Subsystems:        c.Subsystem,
+			Categories:        c.Category,
+			Processes:         c.Process,
+			MinLevel:          minLevel,
+			MaxLevel:          maxLevel,
+			Pattern:           pattern,
+			ExcludePatterns:   excludePatterns,
+			ExcludeSubsystems: c.ExcludeSubsystem,
+			BufferSize:        c.BufferSize,
+			RawPredicate:      c.Predicate,
+			Verbose:           globals.Verbose,
+		}
 
 	if c.DryRunJSON {
 		enc := json.NewEncoder(globals.Stdout)

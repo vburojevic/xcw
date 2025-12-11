@@ -511,6 +511,7 @@ Key properties:
 
 * macOS 14 (Sonoma) or later
 * Xcode with the iOS Simulator installed
+* Physical iOS devices are not supported yet; Apple doesn't provide a stable CLI for unified logs. Use Console.app or `idevicesyslog` as a workaround.
 * `tmux` (optional, required only if you use `--tmux` sessions)
 
 ## License

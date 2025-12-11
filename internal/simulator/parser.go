@@ -2,43 +2,32 @@ package simulator
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"time"
 
 	"github.com/vburojevic/xcw/internal/domain"
 )
 
-// RawNDJSONEntry matches the native NDJSON structure from `log stream --style ndjson`
-type RawNDJSONEntry struct {
-	Timestamp        string `json:"timestamp"`
-	MessageType      string `json:"messageType"`
-	EventType        string `json:"eventType"`
-	EventMessage     string `json:"eventMessage"`
-	ProcessID        int    `json:"processID"`
-	ProcessImagePath string `json:"processImagePath"`
-	ProcessImageUUID string `json:"processImageUUID"`
-	Subsystem        string `json:"subsystem"`
-	Category         string `json:"category"`
-	ThreadID         int    `json:"threadID"`
-	FormatString     string `json:"formatString"`
-	UserID           int    `json:"userID"`
-	SenderImagePath  string `json:"senderImagePath"`
-	SenderImageUUID  string `json:"senderImageUUID"`
-	TraceID          int64  `json:"traceID"`
-	MachTimestamp    int64  `json:"machTimestamp"`
-}
-
 // Parser parses raw NDJSON log lines into structured LogEntry
-type Parser struct{}
+type Parser struct {
+	onTimestampError func(raw string, err error)
+}
 
 // NewParser creates a new log parser
 func NewParser() *Parser {
 	return &Parser{}
 }
 
+// SetTimestampErrorHandler sets a callback for timestamp parse failures.
+// Pass nil to disable.
+func (p *Parser) SetTimestampErrorHandler(fn func(raw string, err error)) {
+	p.onTimestampError = fn
+}
+
 // Parse converts a raw NDJSON line to a LogEntry
 func (p *Parser) Parse(line []byte) (*domain.LogEntry, error) {
-	var raw RawNDJSONEntry
+	var raw domain.RawLogEntry
 	if err := json.Unmarshal(line, &raw); err != nil {
 		return nil, err
 	}
@@ -51,6 +40,9 @@ func (p *Parser) Parse(line []byte) (*domain.LogEntry, error) {
 	// Parse timestamp: "2025-12-08 22:11:55.808033+0100"
 	ts, err := parseTimestamp(raw.Timestamp)
 	if err != nil {
+		if p.onTimestampError != nil {
+			p.onTimestampError(raw.Timestamp, err)
+		}
 		ts = time.Now() // Fallback to current time
 	}
 
@@ -75,12 +67,11 @@ func (p *Parser) Parse(line []byte) (*domain.LogEntry, error) {
 
 // parseTimestamp handles the Apple log timestamp format
 func parseTimestamp(s string) (time.Time, error) {
-	// Format: "2025-12-08 22:11:55.808033+0100"
+	// Apple unified log format: "2006-01-02 15:04:05[.fraction]+ZZZZ"
+	// Fractional seconds may be 1-9 digits; offset is numeric without colon.
 	layouts := []string{
-		"2006-01-02 15:04:05.000000-0700",
-		"2006-01-02 15:04:05.000000+0100",
+		"2006-01-02 15:04:05.999999999-0700",
 		"2006-01-02 15:04:05-0700",
-		"2006-01-02 15:04:05.999999-0700",
 	}
 
 	for _, layout := range layouts {
@@ -89,6 +80,5 @@ func parseTimestamp(s string) (time.Time, error) {
 		}
 	}
 
-	// Try to parse with fixed offset format
-	return time.Parse("2006-01-02 15:04:05.999999-0700", s)
+	return time.Time{}, fmt.Errorf("unrecognized timestamp: %q", s)
 }

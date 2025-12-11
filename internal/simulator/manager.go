@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/vburojevic/xcw/internal/domain"
@@ -18,6 +19,11 @@ import (
 type Manager struct {
 	xcrunPath    string
 	pollInterval time.Duration
+	cacheTTL     time.Duration
+
+	cacheMu       sync.Mutex
+	cachedDevices []domain.Device
+	cacheAt       time.Time
 }
 
 // NewManager creates a new simulator manager
@@ -25,11 +31,22 @@ func NewManager() *Manager {
 	return &Manager{
 		xcrunPath:    "xcrun",
 		pollInterval: 2 * time.Second,
+		cacheTTL:     2 * time.Second,
 	}
 }
 
 // ListDevices returns all available simulators
 func (m *Manager) ListDevices(ctx context.Context) ([]domain.Device, error) {
+	// Serve from short-lived cache to avoid repeated simctl calls
+	m.cacheMu.Lock()
+	if m.cachedDevices != nil && time.Since(m.cacheAt) < m.cacheTTL {
+		devs := make([]domain.Device, len(m.cachedDevices))
+		copy(devs, m.cachedDevices)
+		m.cacheMu.Unlock()
+		return devs, nil
+	}
+	m.cacheMu.Unlock()
+
 	cmd := exec.CommandContext(ctx, m.xcrunPath, "simctl", "list", "devices", "--json")
 	output, err := cmd.Output()
 	if err != nil {
@@ -72,6 +89,12 @@ func (m *Manager) ListDevices(ctx context.Context) ([]domain.Device, error) {
 			})
 		}
 	}
+
+	// Update cache
+	m.cacheMu.Lock()
+	m.cachedDevices = devices
+	m.cacheAt = time.Now()
+	m.cacheMu.Unlock()
 
 	return devices, nil
 }

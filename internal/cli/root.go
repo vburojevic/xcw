@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 
+	"go.uber.org/zap"
 	"github.com/vburojevic/xcw/internal/config"
 )
 
@@ -53,6 +54,7 @@ type Globals struct {
 	Stdout  io.Writer
 	Stderr  io.Writer
 	Config  *config.Config
+	Logger  *zap.SugaredLogger
 }
 
 // NewGlobals creates a new Globals instance from CLI flags
@@ -69,6 +71,9 @@ func NewGlobals(cli *CLI) *Globals {
 	if cli.MachineFriendly {
 		g.Format = "ndjson"
 		// Keep Quiet as provided; agents often want session banners/warnings
+	}
+	if g.Verbose {
+		g.Logger = newZapLogger()
 	}
 	return g
 }
@@ -106,14 +111,31 @@ func NewGlobalsWithConfig(cli *CLI, cfg *config.Config) *Globals {
 		}
 	}
 
+	if g.Verbose {
+		g.Logger = newZapLogger()
+	}
+
 	return g
 }
 
 // Debug prints a debug message if verbose mode is enabled
 func (g *Globals) Debug(format string, args ...interface{}) {
-	if g.Verbose {
-		fmt.Fprintf(g.Stderr, "[DEBUG] "+format+"\n", args...)
+	if !g.Verbose {
+		return
 	}
+	if g.Logger != nil {
+		g.Logger.Debugf(format, args...)
+		return
+	}
+	fmt.Fprintf(g.Stderr, "[DEBUG] "+format+"\n", args...)
+}
+
+func newZapLogger() *zap.SugaredLogger {
+	cfg := zap.NewProductionConfig()
+	cfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+	cfg.Encoding = "json"
+	logger, _ := cfg.Build()
+	return logger.Sugar()
 }
 
 // VersionCmd shows version information

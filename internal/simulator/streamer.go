@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -27,12 +28,14 @@ type StreamOptions struct {
 	ExcludeSubsystems []string         // Subsystems to exclude
 	BufferSize        int              // Ring buffer size
 	RawPredicate      string           // Raw NSPredicate string (overrides other filters)
+	Verbose           bool             // Enable verbose diagnostics
 }
 
 // Streamer handles real-time log streaming from a simulator
 type Streamer struct {
 	manager *Manager
 	parser  *Parser
+	rng     *rand.Rand
 
 	mu         sync.RWMutex
 	udid       string
@@ -43,12 +46,16 @@ type Streamer struct {
 	running    bool
 	cancelFunc context.CancelFunc
 	buffer     *RingBuffer
+	wg         sync.WaitGroup
+	done       chan struct{}
+	closeOnce  sync.Once
 
 	// Stats
 	totalCount int
 	errorCount int
 	faultCount int
 	dropped    int
+	tsDropped  int
 }
 
 // NewStreamer creates a new log streamer
@@ -56,6 +63,7 @@ func NewStreamer(manager *Manager) *Streamer {
 	return &Streamer{
 		manager: manager,
 		parser:  NewParser(),
+		rng:     rand.New(rand.NewSource(time.Now().UnixNano())),
 		logs:    make(chan domain.LogEntry, 1000),
 		errors:  make(chan error, 10),
 	}
@@ -73,6 +81,22 @@ func (s *Streamer) Start(ctx context.Context, udid string, opts StreamOptions) e
 	s.udid = udid
 	s.opts = opts
 
+	// Wire timestamp parse diagnostics when verbose
+	if opts.Verbose {
+		s.parser.SetTimestampErrorHandler(func(raw string, err error) {
+			s.mu.Lock()
+			s.tsDropped++
+			drops := s.tsDropped
+			s.mu.Unlock()
+			// Emit periodic notice to avoid spamming
+			if drops%100 == 0 {
+				s.sendError(fmt.Errorf("timestamp_parse_drop: %d failures (latest %q: %v)", drops, raw, err))
+			}
+		})
+	} else {
+		s.parser.SetTimestampErrorHandler(nil)
+	}
+
 	bufSize := opts.BufferSize
 	if bufSize <= 0 {
 		bufSize = 100
@@ -86,9 +110,15 @@ func (s *Streamer) Start(ctx context.Context, udid string, opts StreamOptions) e
 	streamCtx, cancel := context.WithCancel(ctx)
 	s.cancelFunc = cancel
 	s.running = true
+	s.done = make(chan struct{})
 
 	// Start streaming with auto-reconnect
-	go s.streamLoop(streamCtx)
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.streamLoop(streamCtx)
+		close(s.done)
+	}()
 
 	return nil
 }
@@ -103,7 +133,6 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 
 	backoff := time.Second
 	maxBackoff := 30 * time.Second
-	rand.Seed(time.Now().UnixNano())
 
 	for {
 		select {
@@ -121,9 +150,9 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			}
-			backoff = jitter(min(backoff*2, maxBackoff))
-			continue
-		}
+					backoff = s.jitter(min(backoff*2, maxBackoff))
+					continue
+				}
 
 		if !device.IsBooted() {
 			// Try to boot the device
@@ -134,7 +163,7 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 				case <-ctx.Done():
 					return
 				}
-				backoff = jitter(min(backoff*2, maxBackoff))
+				backoff = s.jitter(min(backoff*2, maxBackoff))
 				continue
 			}
 
@@ -163,7 +192,7 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(backoff):
-			backoff = jitter(min(backoff*2, maxBackoff))
+			backoff = s.jitter(min(backoff*2, maxBackoff))
 		}
 	}
 }
@@ -350,6 +379,34 @@ func (s *Streamer) shouldExcludeSubsystem(subsystem string) bool {
 // matchProcess checks if a process matches the filter list
 func (s *Streamer) matchProcess(process string) bool {
 	for _, p := range s.opts.Processes {
+		if p == "" {
+			continue
+		}
+
+		// Regex notation: re:<pattern> or /pattern/
+		if strings.HasPrefix(p, "re:") {
+			if re, err := regexp.Compile(p[3:]); err == nil && re.MatchString(process) {
+				return true
+			}
+			continue
+		}
+		if strings.HasPrefix(p, "/") && strings.HasSuffix(p, "/") && len(p) > 1 {
+			pat := strings.TrimSuffix(strings.TrimPrefix(p, "/"), "/")
+			if re, err := regexp.Compile(pat); err == nil && re.MatchString(process) {
+				return true
+			}
+			continue
+		}
+
+		// Glob/prefix matching when wildcards are present
+		if strings.ContainsAny(p, "*?[") {
+			if ok, _ := filepath.Match(p, process); ok {
+				return true
+			}
+			continue
+		}
+
+		// Exact match fallback
 		if process == p {
 			return true
 		}
@@ -374,26 +431,44 @@ func (s *Streamer) sendError(err error) {
 	}
 }
 
-func jitter(d time.Duration) time.Duration {
-	// random between 0.5x and 1.5x
-	factor := 0.5 + rand.Float64()
+func (s *Streamer) jitter(d time.Duration) time.Duration {
+	// random between 0.5x and 1.5x using per-stream RNG
+	factor := 0.5 + s.rng.Float64()
 	return time.Duration(float64(d) * factor)
 }
 
 // Stop terminates the log stream
 func (s *Streamer) Stop() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.cancelFunc != nil {
-		s.cancelFunc()
-	}
-
-	if s.cmd != nil && s.cmd.Process != nil {
-		s.cmd.Process.Kill()
-	}
-
+	cancel := s.cancelFunc
+	cmd := s.cmd
+	done := s.done
 	s.running = false
+	s.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+	}
+
+	// Wait for streamLoop/runLogStream to exit
+	s.wg.Wait()
+	if done != nil {
+		select {
+		case <-done:
+		default:
+		}
+	}
+
+	// Close channels once to signal consumers
+	s.closeOnce.Do(func() {
+		close(s.logs)
+		close(s.errors)
+	})
+
 	return nil
 }
 

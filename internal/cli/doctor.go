@@ -56,6 +56,9 @@ func (c *DoctorCmd) Run(globals *Globals) error {
 	// Check tmux
 	checks = append(checks, c.checkTmux())
 
+	// Check physical device tooling (optional)
+	checks = append(checks, c.checkPhysicalDeviceSupport())
+
 	// Check config file
 	checks = append(checks, c.checkConfig())
 
@@ -218,6 +221,24 @@ func (c *DoctorCmd) checkTmux() checkResult {
 		Name:    "tmux",
 		Status:  "ok",
 		Message: version,
+		Details: path,
+	}
+}
+
+func (c *DoctorCmd) checkPhysicalDeviceSupport() checkResult {
+	path, err := exec.LookPath("idevicesyslog")
+	if err != nil {
+		return checkResult{
+			Name:    "Physical devices",
+			Status:  "warning",
+			Message: "Physical device log streaming not supported by Apple CLI",
+			Details: "Install libimobiledevice (idevicesyslog) if you need device syslog access",
+		}
+	}
+	return checkResult{
+		Name:    "Physical devices",
+		Status:  "ok",
+		Message: "idevicesyslog available",
 		Details: path,
 	}
 }

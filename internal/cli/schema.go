@@ -36,6 +36,7 @@ func (c *SchemaCmd) Run(globals *Globals) error {
 		"summary":       summarySchema(),
 		"heartbeat":     heartbeatSchema(),
 		"error":         errorSchema(),
+		"rotation":      rotationSchema(),
 		"tmux":          tmuxSchema(),
 		"info":          infoSchema(),
 		"warning":       warningSchema(),
@@ -51,7 +52,7 @@ func (c *SchemaCmd) Run(globals *Globals) error {
 	// Determine which schemas to output
 	typesToOutput := c.Type
 	if len(typesToOutput) == 0 {
-		typesToOutput = []string{"log", "summary", "heartbeat", "error", "tmux", "info", "warning", "trigger", "doctor", "app", "pick", "update", "session", "session_debug"}
+		typesToOutput = []string{"log", "summary", "heartbeat", "error", "rotation", "tmux", "info", "warning", "trigger", "doctor", "app", "pick", "update", "session", "session_debug"}
 	}
 
 	// Build output
@@ -220,6 +221,34 @@ func heartbeatSchema() map[string]interface{} {
 			},
 		},
 		"required": []string{"type", "schemaVersion", "timestamp", "uptime_seconds", "logs_since_last"},
+	}
+}
+
+func rotationSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type":        "object",
+		"title":       "Rotation",
+		"description": "File rotation notice indicating active output file path",
+		"properties": map[string]interface{}{
+			"type": map[string]interface{}{
+				"type":  "string",
+				"const": "rotation",
+			},
+			"schemaVersion": schemaVersionProperty(),
+			"path": map[string]interface{}{
+				"type":        "string",
+				"description": "Path to the rotated output file",
+			},
+			"tail_id": map[string]interface{}{
+				"type":        "string",
+				"description": "Tail invocation ID",
+			},
+			"session": map[string]interface{}{
+				"type":        "integer",
+				"description": "Session number for this file",
+			},
+		},
+		"required": []string{"type", "schemaVersion", "path"},
 	}
 }
 

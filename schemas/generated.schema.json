@@ -369,6 +369,39 @@
       "title": "Pick Result",
       "type": "object"
     },
+    "rotation": {
+      "description": "File rotation notice indicating active output file path",
+      "properties": {
+        "path": {
+          "description": "Path to the rotated output file",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "session": {
+          "description": "Session number for this file",
+          "type": "integer"
+        },
+        "tail_id": {
+          "description": "Tail invocation ID",
+          "type": "string"
+        },
+        "type": {
+          "const": "rotation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "path"
+      ],
+      "title": "Rotation",
+      "type": "object"
+    },
     "session": {
       "description": "Information about a session log file",
       "properties": {

@@ -41,6 +41,7 @@ type WatchCmd struct {
 	TriggerTimeout      string   `default:"30s" help:"Maximum time for trigger command execution"`
 	MaxParallelTriggers int      `default:"5" help:"Maximum concurrent trigger executions"`
 	TriggerOutput       string   `default:"discard" enum:"inherit,discard,capture" help:"Trigger command output handling"`
+	TriggerNoShell      bool     `help:"Run trigger commands directly without shell (safer). Command is split on spaces; no shell expansions."`
 	Output              string   `short:"o" help:"Write output to explicit file path"`
 	SessionDir          string   `help:"Directory for session files (default: ~/.xcw/sessions)"`
 	SessionPrefix       string   `help:"Prefix for session filename (default: app bundle ID)"`
@@ -263,16 +264,17 @@ func (c *WatchCmd) Run(globals *Globals) error {
 
 	// Create streamer
 	streamer := simulator.NewStreamer(mgr)
-	opts := simulator.StreamOptions{
-		BundleID:          c.App,
-		MinLevel:          minLevel,
-		MaxLevel:          maxLevel,
-		Pattern:           pattern,
-		ExcludePatterns:   excludePatterns,
-		ExcludeSubsystems: c.ExcludeSubsystem,
-		BufferSize:        100,
-		RawPredicate:      c.Predicate,
-	}
+		opts := simulator.StreamOptions{
+			BundleID:          c.App,
+			MinLevel:          minLevel,
+			MaxLevel:          maxLevel,
+			Pattern:           pattern,
+			ExcludePatterns:   excludePatterns,
+			ExcludeSubsystems: c.ExcludeSubsystem,
+			BufferSize:        100,
+			RawPredicate:      c.Predicate,
+			Verbose:           globals.Verbose,
+		}
 
 	if err := streamer.Start(ctx, device.UDID, opts); err != nil {
 		return c.outputError(globals, "STREAM_FAILED", err.Error())
@@ -376,8 +378,24 @@ func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, ent
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
+		// Build command (shell or direct exec)
+		var cmd *exec.Cmd
+		if c.TriggerNoShell {
+			argv := strings.Fields(command)
+			if len(argv) == 0 {
+				if globals.Format == "ndjson" {
+					output.NewNDJSONWriter(globals.Stdout).WriteTriggerError(command, "empty trigger command")
+				} else if !globals.Quiet {
+					fmt.Fprintln(globals.Stderr, "[TRIGGER ERROR] empty trigger command")
+				}
+				return
+			}
+			cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)
+		} else {
+			cmd = exec.CommandContext(ctx, "sh", "-c", command)
+		}
+
 		// Set environment variables for the command
-		cmd := exec.CommandContext(ctx, "sh", "-c", command)
 		cmd.Env = append(os.Environ(),
 			"XCW_TRIGGER="+triggerType,
 			"XCW_LEVEL="+string(entry.Level),

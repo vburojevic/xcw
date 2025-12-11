@@ -90,4 +90,6 @@ type RawLogEntry struct {
 	UserID           int    `json:"userID"`
 	SenderImagePath  string `json:"senderImagePath"`
 	SenderImageUUID  string `json:"senderImageUUID"`
+	TraceID          int64  `json:"traceID,omitempty"`
+	MachTimestamp    int64  `json:"machTimestamp,omitempty"`
 }
