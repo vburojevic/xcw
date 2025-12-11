@@ -68,6 +68,14 @@ type WarningOutput struct {
 	Message       string `json:"message"`
 }
 
+// ReconnectNotice signals a stream reconnect
+type ReconnectNotice struct {
+	Type          string `json:"type"` // Always "reconnect_notice"
+	SchemaVersion int    `json:"schemaVersion"`
+	Message       string `json:"message"`
+	TailID        string `json:"tail_id,omitempty"`
+}
+
 // TmuxOutput represents tmux session information
 type TmuxOutput struct {
 	Type          string `json:"type"` // Always "tmux"
@@ -197,6 +205,16 @@ func (w *NDJSONWriter) WriteWarning(message string) error {
 		Type:          "warning",
 		SchemaVersion: SchemaVersion,
 		Message:       message,
+	})
+}
+
+// WriteReconnect outputs a reconnect notice
+func (w *NDJSONWriter) WriteReconnect(message, tailID string) error {
+	return w.encoder.Encode(&ReconnectNotice{
+		Type:          "reconnect_notice",
+		SchemaVersion: SchemaVersion,
+		Message:       message,
+		TailID:        tailID,
 	})
 }
 

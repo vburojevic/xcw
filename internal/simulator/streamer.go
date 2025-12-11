@@ -150,6 +150,10 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 		if err != nil && ctx.Err() == nil {
 			s.sendError(fmt.Errorf("log stream error: %w", err))
 		}
+		// Notify reconnect if we're continuing
+		if ctx.Err() == nil {
+			s.sendError(fmt.Errorf("reconnect_notice: reconnecting log stream"))
+		}
 
 		// Check if we should reconnect
 		select {
