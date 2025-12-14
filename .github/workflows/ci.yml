@@ -14,13 +14,12 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.25.5"
-      - name: Install golangci-lint
+      - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          args: --timeout=5m
-      - name: Run golangci-lint
-        run: golangci-lint run ./...
+          install-mode: goinstall
+          args: --timeout=5m ./...
       - name: Regenerate docs/schema
         run: |
           go run ./cmd/xcw help --json > docs/help.json
