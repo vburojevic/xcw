@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.5] - 2025-12-15
+
+### Added
+- `xcw query --dry-run-json` and `xcw watch --dry-run-json` to print resolved options/triggers as JSON and exit.
+
 ## [0.19.4] - 2025-12-15
 
 ### Added
