@@ -13,6 +13,12 @@
 - `scripts/`: regen helpers (`gen-readme.sh`, `gen-schema.sh`).
 - `.beads/`: Beads issue tracker data (use `bd --no-daemon` if daemon path mismatches).
 
+## Task Management (Beads)
+
+- Always use Beads CLI (`bd`) for task management (create issues/epics, update status, add comments, close work).
+- Prefer `bd --no-daemon` for deterministic local runs (and when daemon paths mismatch).
+- Do not hand-edit `.beads/*` JSONL/db files; use `bd` commands to avoid drift and hash mismatches.
+
 ## Architecture & Extensibility
 
 - Each command is a Kong struct in `internal/cli/<command>.go` with `Run(*Globals)`, registered in `root.go`.
