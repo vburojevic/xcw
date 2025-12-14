@@ -45,5 +45,9 @@ func resolveLevels(minOverride, maxOverride string, globalsMin string) (domain.L
 	if minOverride != "" {
 		minLevel = minOverride
 	}
-	return domain.ParseLogLevel(minLevel), domain.ParseLogLevel(maxOverride)
+	var maxLevel domain.LogLevel
+	if maxOverride != "" {
+		maxLevel = domain.ParseLogLevel(maxOverride)
+	}
+	return domain.ParseLogLevel(minLevel), maxLevel
 }

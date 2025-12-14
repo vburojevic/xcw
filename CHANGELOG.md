@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Test: `xcw tail` integration-style coverage using a stubbed `xcrun` to validate `--max-logs` cutoffs.
+
+### Fixed
+- `--max-level` is now truly optional: when unset, `tail`/`query`/`watch` no longer apply an implicit maximum that could drop `error`/`fault` logs.
+
 ## [0.19.2] - 2025-12-14
 
 ### Added

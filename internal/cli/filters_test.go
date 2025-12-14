@@ -41,7 +41,7 @@ func TestResolveLevels(t *testing.T) {
 	if min != domain.LogLevelDefault {
 		t.Fatalf("expected min level default, got %s", min)
 	}
-	if max != domain.LogLevelDefault {
-		t.Fatalf("expected max level default when not set, got %s", max)
+	if max != "" {
+		t.Fatalf("expected no max level when not set, got %s", max)
 	}
 }
