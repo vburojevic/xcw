@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -29,6 +30,7 @@ type QueryCmd struct {
 	MinLevel         string   `help:"Minimum log level: debug, info, default, error, fault (overrides global --level)"`
 	MaxLevel         string   `help:"Maximum log level: debug, info, default, error, fault (optional; unset = no max)"`
 	Predicate        string   `help:"Raw NSPredicate filter (overrides --app, --subsystem, --category)"`
+	DryRunJSON       bool     `help:"Print resolved query options as JSON and exit (no query; ndjson output only)"`
 	Analyze          bool     `help:"Include AI-friendly analysis summary"`
 	PersistPatterns  bool     `help:"Save detected patterns for future reference (marks new vs known)"`
 	PatternFile      string   `help:"Custom pattern file path (default: ~/.xcw/patterns.json)"`
@@ -79,7 +81,7 @@ func (c *QueryCmd) Run(globals *Globals) error {
 	}
 
 	// Output query info if not quiet
-	if !globals.Quiet {
+	if !globals.Quiet && !c.DryRunJSON {
 		if globals.Format == "ndjson" {
 			if err := output.NewNDJSONWriter(globals.Stdout).WriteInfo(
 				fmt.Sprintf("Querying logs from %s", device.Name),
@@ -127,6 +129,45 @@ func (c *QueryCmd) Run(globals *Globals) error {
 		opts.OnStderrLine = func(line string) {
 			emitWarning(globals, diagEmitter, "xcrun_stderr: "+line)
 		}
+	}
+
+	if c.DryRunJSON {
+		if globals.Format != "ndjson" {
+			return c.outputError(globals, "INVALID_FLAGS", "--dry-run-json requires ndjson output", "add --format ndjson or remove --dry-run-json")
+		}
+		enc := json.NewEncoder(globals.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(struct {
+			BundleID          string
+			Subsystems        []string
+			Categories        []string
+			Processes         []string
+			MinLevel          domain.LogLevel
+			MaxLevel          domain.LogLevel
+			Pattern           string
+			Exclude           []string
+			ExcludeSubsystems []string
+			Since             time.Duration
+			Until             time.Time
+			Limit             int
+			RawPredicate      string
+			Where             []string
+		}{
+			BundleID:          c.App,
+			Subsystems:        c.Subsystem,
+			Categories:        c.Category,
+			Processes:         c.Process,
+			MinLevel:          minLevel,
+			MaxLevel:          maxLevel,
+			Pattern:           c.Pattern,
+			Exclude:           c.Exclude,
+			ExcludeSubsystems: c.ExcludeSubsystem,
+			Since:             since,
+			Until:             until,
+			Limit:             c.Limit,
+			RawPredicate:      c.Predicate,
+			Where:             c.Where,
+		})
 	}
 
 	// Execute query

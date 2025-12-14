@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -54,6 +55,7 @@ type WatchCmd struct {
 	MaxParallelTriggers int      `default:"5" help:"Maximum concurrent trigger executions"`
 	TriggerOutput       string   `default:"discard" enum:"inherit,discard,capture" help:"Trigger command output handling"`
 	TriggerNoShell      bool     `help:"Run trigger commands directly without shell (safer). Command is split on spaces; no shell expansions."`
+	DryRunJSON          bool     `help:"Print resolved stream options and triggers as JSON and exit (no streaming; ndjson output only)"`
 	Output              string   `short:"o" help:"Write output to explicit file path"`
 	SessionDir          string   `help:"Directory for session files (default: ~/.xcw/sessions)"`
 	SessionPrefix       string   `help:"Prefix for session filename (default: app bundle ID)"`
@@ -140,7 +142,7 @@ func (c *WatchCmd) Run(globals *Globals) error {
 	if globals.FlagProvided("simulator") && globals.FlagProvided("booted") {
 		return c.outputError(globals, "INVALID_FLAGS", "--simulator and --booted are mutually exclusive")
 	}
-	if err := validateFlags(globals, false, false); err != nil {
+	if err := validateFlags(globals, c.DryRunJSON, c.Tmux); err != nil {
 		return err
 	}
 	if err := validateAppPredicateAll(c.App, c.Predicate, c.All, false); err != nil {
@@ -160,6 +162,74 @@ func (c *WatchCmd) Run(globals *Globals) error {
 		sessionTracker = session.NewTracker(c.App, device.Name, device.UDID, tailID, "", "")
 	} else {
 		sessionTracker = &noopSessionTracker{}
+	}
+
+	// Compile filters (pattern, exclude, where unsupported here)
+	pattern, excludePatterns, whereFilter, err := buildFilters(c.Pattern, c.Exclude, c.Where)
+	if err != nil {
+		return c.outputError(globals, "INVALID_FILTER", err.Error(), hintForFilter(err))
+	}
+	// Pattern/exclude are applied in the simulator streamer; keep pipeline for where-only filtering.
+	pipeline := filter.NewPipeline(nil, nil, whereFilter)
+
+	// Setup dedupe filter if enabled
+	var dedupeFilter *filter.DedupeFilter
+	if c.Dedupe {
+		var dedupeWindow time.Duration
+		if c.DedupeWindow != "" {
+			dedupeWindow, err = time.ParseDuration(c.DedupeWindow)
+			if err != nil {
+				return c.outputError(globals, "INVALID_DEDUPE_WINDOW", fmt.Sprintf("invalid dedupe window: %s", err))
+			}
+		}
+		dedupeFilter = filter.NewDedupeFilter(dedupeWindow)
+	}
+
+	// Determine log level (command-specific overrides global)
+	minLevel, maxLevel := resolveLevels(c.MinLevel, c.MaxLevel, globals.Level)
+
+	// Create streamer
+	streamer := simulator.NewStreamer(mgr)
+	opts := simulator.StreamOptions{
+		BundleID:          c.App,
+		MinLevel:          minLevel,
+		MaxLevel:          maxLevel,
+		Pattern:           pattern,
+		ExcludePatterns:   excludePatterns,
+		ExcludeSubsystems: c.ExcludeSubsystem,
+		Processes:         c.Process,
+		BufferSize:        100,
+		RawPredicate:      c.Predicate,
+		Verbose:           globals.Verbose,
+	}
+
+	if c.DryRunJSON {
+		if globals.Format != "ndjson" {
+			return c.outputError(globals, "INVALID_FLAGS", "--dry-run-json requires ndjson output", "add --format ndjson or remove --dry-run-json")
+		}
+		enc := json.NewEncoder(globals.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(struct {
+			Stream              simulator.StreamOptions `json:"stream"`
+			Cooldown            string                  `json:"cooldown"`
+			TriggerTimeout      string                  `json:"trigger_timeout"`
+			MaxParallelTriggers int                     `json:"max_parallel_triggers"`
+			TriggerOutput       string                  `json:"trigger_output"`
+			TriggerNoShell      bool                    `json:"trigger_no_shell"`
+			OnError             string                  `json:"on_error,omitempty"`
+			OnFault             string                  `json:"on_fault,omitempty"`
+			OnPattern           []string                `json:"on_pattern,omitempty"`
+		}{
+			Stream:              opts,
+			Cooldown:            c.Cooldown,
+			TriggerTimeout:      c.TriggerTimeout,
+			MaxParallelTriggers: c.MaxParallelTriggers,
+			TriggerOutput:       c.TriggerOutput,
+			TriggerNoShell:      c.TriggerNoShell,
+			OnError:             c.OnError,
+			OnFault:             c.OnFault,
+			OnPattern:           c.OnPattern,
+		})
 	}
 
 	// Determine output destination
@@ -302,45 +372,6 @@ func (c *WatchCmd) Run(globals *Globals) error {
 				globals.Debug("failed to write watch info: %v", err)
 			}
 		}
-	}
-
-	// Compile filters (pattern, exclude, where unsupported here)
-	pattern, excludePatterns, whereFilter, err := buildFilters(c.Pattern, c.Exclude, c.Where)
-	if err != nil {
-		return c.outputError(globals, "INVALID_FILTER", err.Error(), hintForFilter(err))
-	}
-	// Pattern/exclude are applied in the simulator streamer; keep pipeline for where-only filtering.
-	pipeline := filter.NewPipeline(nil, nil, whereFilter)
-
-	// Setup dedupe filter if enabled
-	var dedupeFilter *filter.DedupeFilter
-	if c.Dedupe {
-		var dedupeWindow time.Duration
-		if c.DedupeWindow != "" {
-			dedupeWindow, err = time.ParseDuration(c.DedupeWindow)
-			if err != nil {
-				return c.outputError(globals, "INVALID_DEDUPE_WINDOW", fmt.Sprintf("invalid dedupe window: %s", err))
-			}
-		}
-		dedupeFilter = filter.NewDedupeFilter(dedupeWindow)
-	}
-
-	// Determine log level (command-specific overrides global)
-	minLevel, maxLevel := resolveLevels(c.MinLevel, c.MaxLevel, globals.Level)
-
-	// Create streamer
-	streamer := simulator.NewStreamer(mgr)
-	opts := simulator.StreamOptions{
-		BundleID:          c.App,
-		MinLevel:          minLevel,
-		MaxLevel:          maxLevel,
-		Pattern:           pattern,
-		ExcludePatterns:   excludePatterns,
-		ExcludeSubsystems: c.ExcludeSubsystem,
-		Processes:         c.Process,
-		BufferSize:        100,
-		RawPredicate:      c.Predicate,
-		Verbose:           globals.Verbose,
 	}
 
 	if err := streamer.Start(ctx, device.UDID, opts); err != nil {
