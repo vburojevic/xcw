@@ -30,6 +30,36 @@ jobs:
       - name: Go test
         run: go test ./...
 
+  bench-guard:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.5"
+      - name: Compare benchmarks (base vs head)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          PKGS=(./internal/simulator ./internal/filter ./internal/output)
+          TMP="$(mktemp -d)"
+          BASE_OUT="$TMP/base.txt"
+          HEAD_OUT="$TMP/head.txt"
+
+          git checkout --quiet "$BASE_SHA"
+          go test -run '^$' -bench . -benchmem -count 1 -benchtime 200ms "${PKGS[@]}" > "$BASE_OUT"
+
+          git checkout --quiet "$HEAD_SHA"
+          go test -run '^$' -bench . -benchmem -count 1 -benchtime 200ms "${PKGS[@]}" > "$HEAD_OUT"
+
+          go run ./scripts/benchguard --base "$BASE_OUT" --head "$HEAD_OUT"
+
   macos-test:
     runs-on: macos-latest
     steps:
