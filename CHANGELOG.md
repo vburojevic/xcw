@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.6] - 2025-12-15
+
+### Fixed
+- Avoid treating benign `os.ErrClosed` errors from stderr scanners as fatal in `xcw query` and log streaming.
+
 ## [0.19.5] - 2025-12-15
 
 ### Added
