@@ -25,7 +25,7 @@ func (c *SummaryCmd) Run(globals *Globals) error {
 
 	// Find the simulator
 	mgr := simulator.NewManager()
-	device, err := mgr.FindDevice(ctx, c.Simulator)
+	device, err := resolveSimulatorDevice(ctx, mgr, c.Simulator, false)
 	if err != nil {
 		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error(), hintForStreamOrQuery(err))
 	}
@@ -47,12 +47,21 @@ func (c *SummaryCmd) Run(globals *Globals) error {
 
 	// Query recent logs
 	reader := simulator.NewQueryReader()
+	var diagEmitter *output.Emitter
+	if globals.Format == "ndjson" {
+		diagEmitter = output.NewEmitter(globals.Stdout)
+	}
 	opts := simulator.QueryOptions{
 		BundleID: c.App,
 		MinLevel: domain.ParseLogLevel(globals.Level),
 		Pattern:  pattern,
 		Since:    window,
 		Limit:    10000, // Get enough for good analysis
+	}
+	if globals.Verbose {
+		opts.OnStderrLine = func(line string) {
+			emitWarning(globals, diagEmitter, "xcrun_stderr: "+line)
+		}
 	}
 
 	entries, err := reader.Query(ctx, device.UDID, opts)

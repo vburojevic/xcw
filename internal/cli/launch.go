@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"os/signal"
@@ -27,13 +28,13 @@ type LaunchCmd struct {
 
 // ConsoleOutput represents a line of console output
 type ConsoleOutput struct {
-	Type          string    `json:"type"`
-	SchemaVersion int       `json:"schemaVersion"`
-	Timestamp     time.Time `json:"timestamp"`
-	Stream        string    `json:"stream"` // "stdout" or "stderr"
-	Message       string    `json:"message"`
-	Process       string    `json:"process,omitempty"`
-	PID           int       `json:"pid,omitempty"`
+	Type          string `json:"type"`
+	SchemaVersion int    `json:"schemaVersion"`
+	Timestamp     string `json:"timestamp"`
+	Stream        string `json:"stream"` // "stdout" or "stderr"
+	Message       string `json:"message"`
+	Process       string `json:"process,omitempty"`
+	PID           int    `json:"pid,omitempty"`
 }
 
 // Run executes the launch command
@@ -43,22 +44,13 @@ func (c *LaunchCmd) Run(globals *Globals) error {
 	group, ctx := errgroup.WithContext(signalCtx)
 
 	// Validate mutual exclusivity of flags
-	if c.Simulator != "" && c.Booted {
+	if globals.FlagProvided("simulator") && globals.FlagProvided("booted") {
 		return c.outputError(globals, "INVALID_FLAGS", "--simulator and --booted are mutually exclusive")
 	}
 
 	// Find the simulator
 	mgr := simulator.NewManager()
-	var device *domain.Device
-	var err error
-
-	if c.Simulator != "" {
-		globals.Debug("Finding simulator by name/UDID: %s", c.Simulator)
-		device, err = mgr.FindDevice(ctx, c.Simulator)
-	} else {
-		globals.Debug("Finding booted simulator (auto-detect)")
-		device, err = mgr.FindBootedDevice(ctx)
-	}
+	device, err := resolveSimulatorDevice(ctx, mgr, c.Simulator, c.Booted)
 	if err != nil {
 		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error())
 	}
@@ -107,19 +99,33 @@ func (c *LaunchCmd) Run(globals *Globals) error {
 	// Read stdout in background
 	group.Go(func() error {
 		scanner := bufio.NewScanner(stdout)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 		for scanner.Scan() {
 			c.outputConsoleLine(globals, "stdout", scanner.Text(), c.App)
 		}
-		return scanner.Err()
+		if err := scanner.Err(); err != nil {
+			if errors.Is(err, bufio.ErrTooLong) {
+				return fmt.Errorf("stdout line too long (>1MiB): %w", err)
+			}
+			return fmt.Errorf("stdout read error: %w", err)
+		}
+		return nil
 	})
 
 	// Read stderr in background
 	group.Go(func() error {
 		scanner := bufio.NewScanner(stderr)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 		for scanner.Scan() {
 			c.outputConsoleLine(globals, "stderr", scanner.Text(), c.App)
 		}
-		return scanner.Err()
+		if err := scanner.Err(); err != nil {
+			if errors.Is(err, bufio.ErrTooLong) {
+				return fmt.Errorf("stderr line too long (>1MiB): %w", err)
+			}
+			return fmt.Errorf("stderr read error: %w", err)
+		}
+		return nil
 	})
 
 	// Wait for the command to finish and drain output.
@@ -135,7 +141,7 @@ func (c *LaunchCmd) Run(globals *Globals) error {
 		globals.Debug("App exited with error: %v", waitErr)
 	}
 	if scanErr != nil {
-		globals.Debug("launch output reader error: %v", scanErr)
+		emitWarning(globals, output.NewEmitter(globals.Stdout), "launch output reader error: "+scanErr.Error())
 	}
 
 	return nil
@@ -166,7 +172,7 @@ func (c *LaunchCmd) outputConsoleLine(globals *Globals, stream, message, process
 		out := ConsoleOutput{
 			Type:          "console",
 			SchemaVersion: output.SchemaVersion,
-			Timestamp:     time.Now(),
+			Timestamp:     time.Now().UTC().Format(time.RFC3339Nano),
 			Stream:        stream,
 			Message:       message,
 			Process:       process,

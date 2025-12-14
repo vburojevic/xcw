@@ -118,7 +118,7 @@ func (c *WatchCmd) Run(globals *Globals) error {
 	}
 
 	// Validate mutual exclusivity of flags
-	if c.Simulator != "" && c.Booted {
+	if globals.FlagProvided("simulator") && globals.FlagProvided("booted") {
 		return c.outputError(globals, "INVALID_FLAGS", "--simulator and --booted are mutually exclusive")
 	}
 	if err := validateFlags(globals, false, false); err != nil {
@@ -130,12 +130,7 @@ func (c *WatchCmd) Run(globals *Globals) error {
 
 	// Find the simulator
 	mgr := simulator.NewManager()
-	var device *domain.Device
-	if c.Simulator != "" {
-		device, err = mgr.FindDevice(ctx, c.Simulator)
-	} else {
-		device, err = mgr.FindBootedDevice(ctx)
-	}
+	device, err := resolveSimulatorDevice(ctx, mgr, c.Simulator, c.Booted)
 	if err != nil {
 		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error(), hintForStreamOrQuery(err))
 	}
@@ -287,10 +282,6 @@ func (c *WatchCmd) Run(globals *Globals) error {
 	if c.Exclude != "" {
 		excludeList = append(excludeList, c.Exclude)
 	}
-	pipeline, err := buildPipeline(c.Pattern, excludeList, nil)
-	if err != nil {
-		return c.outputError(globals, "INVALID_FILTER", err.Error(), hintForFilter(err))
-	}
 	pattern, excludePatterns, _, err := buildFilters(c.Pattern, excludeList, nil)
 	if err != nil {
 		return c.outputError(globals, "INVALID_FILTER", err.Error(), hintForFilter(err))
@@ -345,9 +336,6 @@ func (c *WatchCmd) Run(globals *Globals) error {
 			return nil
 
 		case entry := <-streamer.Logs():
-			if pipeline != nil && !pipeline.Match(&entry) {
-				continue
-			}
 			// Output the log entry
 			if err := writer.Write(&entry); err != nil {
 				return err

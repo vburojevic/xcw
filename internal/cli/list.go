@@ -50,9 +50,20 @@ func (c *ListCmd) Run(globals *Globals) error {
 }
 
 func (c *ListCmd) outputNDJSON(globals *Globals, devices []domain.Device) error {
+	type simulatorOutput struct {
+		Type          string `json:"type"`
+		SchemaVersion int    `json:"schemaVersion"`
+		domain.Device
+	}
+
 	encoder := json.NewEncoder(globals.Stdout)
 	for _, d := range devices {
-		if err := encoder.Encode(d); err != nil {
+		out := simulatorOutput{
+			Type:          "simulator",
+			SchemaVersion: output.SchemaVersion,
+			Device:        d,
+		}
+		if err := encoder.Encode(out); err != nil {
 			return err
 		}
 	}

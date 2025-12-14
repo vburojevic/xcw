@@ -34,11 +34,25 @@ func TestStreamerBuildPredicate(t *testing.T) {
 			expected: `subsystem BEGINSWITH "com.example.app"`,
 		},
 		{
+			name: "bundle ID with quotes is escaped",
+			opts: StreamOptions{
+				BundleID: `com.example."app"`,
+			},
+			expected: `subsystem BEGINSWITH "com.example.\"app\""`,
+		},
+		{
 			name: "single subsystem",
 			opts: StreamOptions{
 				Subsystems: []string{"com.apple.network"},
 			},
 			expected: `subsystem == "com.apple.network"`,
+		},
+		{
+			name: "subsystem with backslashes is escaped",
+			opts: StreamOptions{
+				Subsystems: []string{`com.apple.network\\debug`},
+			},
+			expected: `subsystem == "com.apple.network\\\\debug"`,
 		},
 		{
 			name: "bundle ID and subsystem (OR within group)",
@@ -131,6 +145,13 @@ func TestQueryReaderBuildPredicate(t *testing.T) {
 				BundleID: "com.example.app",
 			},
 			expected: `subsystem BEGINSWITH "com.example.app"`,
+		},
+		{
+			name: "bundle ID with quotes is escaped",
+			opts: QueryOptions{
+				BundleID: `com.example."app"`,
+			},
+			expected: `subsystem BEGINSWITH "com.example.\"app\""`,
 		},
 		{
 			name: "bundle ID AND category (AND between groups)",

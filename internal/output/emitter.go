@@ -22,6 +22,7 @@ func (e *Emitter) WriteSummary(s *domain.LogSummary) error   { return e.w.WriteS
 func (e *Emitter) Error(code, msg string) error              { return e.w.WriteError(code, msg) }
 func (e *Emitter) WriteWarning(msg string) error             { return e.w.WriteWarning(msg) }
 func (e *Emitter) WriteHeartbeat(h *Heartbeat) error         { return e.w.WriteHeartbeat(h) }
+func (e *Emitter) WriteStats(s *StreamStats) error           { return e.w.WriteStats(s) }
 func (e *Emitter) Ready(ts, sim, udid, app, tailID string, session int) error {
 	return e.w.WriteReady(ts, sim, udid, app, tailID, session)
 }

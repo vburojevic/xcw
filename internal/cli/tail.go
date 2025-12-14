@@ -59,7 +59,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 	clk := clock.New()
 
 	// Validate mutual exclusivity of flags
-	if c.Simulator != "" && c.Booted {
+	if globals.FlagProvided("simulator") && globals.FlagProvided("booted") {
 		return c.outputError(globals, "INVALID_FLAGS", "--simulator and --booted are mutually exclusive")
 	}
 	if err := validateFlags(globals, c.DryRunJSON, c.Tmux); err != nil {
@@ -71,16 +71,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 
 	// Find the simulator
 	mgr := simulator.NewManager()
-	var device *domain.Device
-	var err error
-
-	if c.Simulator != "" {
-		globals.Debug("Finding simulator by name/UDID: %s", c.Simulator)
-		device, err = mgr.FindDevice(ctx, c.Simulator)
-	} else {
-		globals.Debug("Finding booted simulator (auto-detect)")
-		device, err = mgr.FindBootedDevice(ctx)
-	}
+	device, err := resolveSimulatorDevice(ctx, mgr, c.Simulator, c.Booted)
 	if err != nil {
 		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error(), hintForStreamOrQuery(err))
 	}
@@ -259,7 +250,8 @@ func (c *TailCmd) Run(globals *Globals) error {
 	if err != nil {
 		return c.outputError(globals, "INVALID_FILTER", err.Error(), hintForFilter(err))
 	}
-	pipeline := filter.NewPipeline(pattern, excludePatterns, whereFilter)
+	// Pattern/exclude are applied in the simulator streamer; keep pipeline for where-only filtering.
+	pipeline := filter.NewPipeline(nil, nil, whereFilter)
 
 	// Determine log level (command-specific overrides global)
 	minLevel, maxLevel := resolveLevels(c.MinLevel, c.MaxLevel, globals.Level)
@@ -463,6 +455,26 @@ func (c *TailCmd) Run(globals *Globals) error {
 		}
 	}
 
+	emitStats := func(now time.Time) error {
+		if emitter == nil {
+			return nil
+		}
+		diag := streamer.GetDiagnostics()
+		return emitter.WriteStats(&output.StreamStats{
+			Type:                "stats",
+			SchemaVersion:       output.SchemaVersion,
+			Timestamp:           now.UTC().Format(time.RFC3339Nano),
+			TailID:              tailID,
+			Session:             sessionTracker.CurrentSession(),
+			Reconnects:          diag.Reconnects,
+			ParseDrops:          diag.ParseDrops,
+			TimestampParseDrops: diag.TimestampParseDrops,
+			ChannelDrops:        diag.ChannelDrops,
+			Buffered:            diag.Buffered,
+			LastSeenTimestamp:   lastSeen.UTC().Format(time.RFC3339Nano),
+		})
+	}
+
 	// Process logs
 	for {
 		select {
@@ -641,6 +653,9 @@ func (c *TailCmd) Run(globals *Globals) error {
 					}); err != nil {
 						return err
 					}
+					if err := emitStats(clk.Now()); err != nil {
+						return err
+					}
 				}
 				return nil
 			}
@@ -702,6 +717,9 @@ func (c *TailCmd) Run(globals *Globals) error {
 					}); err != nil {
 						return err
 					}
+					if err := emitStats(clk.Now()); err != nil {
+						return err
+					}
 				}
 				return nil
 			}
@@ -718,6 +736,10 @@ func (c *TailCmd) Run(globals *Globals) error {
 				LastSeenTimestamp: lastSeen.UTC().Format(time.RFC3339Nano),
 			}
 			if err := writer.WriteHeartbeat(heartbeat); err != nil {
+				heartbeatPool.Put(heartbeat)
+				return err
+			}
+			if err := emitStats(clk.Now()); err != nil {
 				heartbeatPool.Put(heartbeat)
 				return err
 			}

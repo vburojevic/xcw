@@ -3,10 +3,10 @@ package simulator
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -51,11 +51,13 @@ type Streamer struct {
 	closeOnce  sync.Once
 
 	// Stats
-	totalCount int
-	errorCount int
-	faultCount int
-	dropped    int
-	tsDropped  int
+	totalCount  int
+	errorCount  int
+	faultCount  int
+	dropped     int
+	tsDropped   int
+	chanDropped int
+	reconnects  int
 }
 
 // NewStreamer creates a new log streamer
@@ -81,21 +83,17 @@ func (s *Streamer) Start(ctx context.Context, udid string, opts StreamOptions) e
 	s.udid = udid
 	s.opts = opts
 
-	// Wire timestamp parse diagnostics when verbose
-	if opts.Verbose {
-		s.parser.SetTimestampErrorHandler(func(raw string, err error) {
-			s.mu.Lock()
-			s.tsDropped++
-			drops := s.tsDropped
-			s.mu.Unlock()
-			// Emit periodic notice to avoid spamming
-			if drops%100 == 0 {
-				s.sendError(fmt.Errorf("timestamp_parse_drop: %d failures (latest %q: %v)", drops, raw, err))
-			}
-		})
-	} else {
-		s.parser.SetTimestampErrorHandler(nil)
-	}
+	// Always count timestamp parse drops; optionally emit diagnostics in verbose mode.
+	s.parser.SetTimestampErrorHandler(func(raw string, err error) {
+		s.mu.Lock()
+		s.tsDropped++
+		drops := s.tsDropped
+		verbose := s.opts.Verbose
+		s.mu.Unlock()
+		if verbose && drops%100 == 0 {
+			s.sendError(fmt.Errorf("timestamp_parse_drop: %d failures (latest %q: %v)", drops, raw, err))
+		}
+	})
 
 	bufSize := opts.BufferSize
 	if bufSize <= 0 {
@@ -105,6 +103,10 @@ func (s *Streamer) Start(ctx context.Context, udid string, opts StreamOptions) e
 	s.totalCount = 0
 	s.errorCount = 0
 	s.faultCount = 0
+	s.dropped = 0
+	s.tsDropped = 0
+	s.chanDropped = 0
+	s.reconnects = 0
 
 	// Create cancellable context
 	streamCtx, cancel := context.WithCancel(ctx)
@@ -133,6 +135,7 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 
 	backoff := time.Second
 	maxBackoff := 30 * time.Second
+	consecutiveFailures := 0
 
 	for {
 		select {
@@ -179,11 +182,21 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 
 		// Start log stream
 		err = s.runLogStream(ctx)
-		if err != nil && ctx.Err() == nil {
-			s.sendError(fmt.Errorf("log stream error: %w", err))
-		}
-		// Notify reconnect if we're continuing
 		if ctx.Err() == nil {
+			if err != nil {
+				consecutiveFailures++
+				// Avoid noisy warnings on transient reconnects; surface errors in verbose mode,
+				// and always after a few consecutive failures.
+				if s.opts.Verbose || consecutiveFailures >= 3 {
+					s.sendError(fmt.Errorf("log stream error: %w", err))
+				}
+			} else {
+				consecutiveFailures = 0
+			}
+
+			s.mu.Lock()
+			s.reconnects++
+			s.mu.Unlock()
 			s.sendError(fmt.Errorf("reconnect_notice: reconnecting log stream"))
 		}
 
@@ -221,6 +234,10 @@ func (s *Streamer) runLogStream(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start log stream: %w", err)
@@ -230,11 +247,31 @@ func (s *Streamer) runLogStream(ctx context.Context) error {
 	s.cmd = cmd
 	s.mu.Unlock()
 
+	// Drain stderr to avoid deadlocks and surface diagnostics in verbose mode.
+	stderrErrCh := make(chan error, 1)
+	verbose := s.opts.Verbose
+	go func() {
+		sc := bufio.NewScanner(stderr)
+		sc.Buffer(make([]byte, 0, 64*1024), 256*1024)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			if verbose {
+				s.sendError(fmt.Errorf("xcrun_stderr: %s", line))
+			}
+		}
+		stderrErrCh <- sc.Err()
+	}()
+
 	// Read and parse log lines
 	scanner := bufio.NewScanner(stdout)
 	// Increase buffer size for long log lines
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	const maxLineBytes = 1024 * 1024
+	scanner.Buffer(make([]byte, 0, 64*1024), maxLineBytes)
 
+Loop:
 	for scanner.Scan() {
 		line := scanner.Bytes()
 
@@ -281,7 +318,7 @@ func (s *Streamer) runLogStream(ctx context.Context) error {
 		}
 
 		// Apply process filter
-		if len(s.opts.Processes) > 0 && !s.matchProcess(entry.Process) {
+		if len(s.opts.Processes) > 0 && !matchProcess(entry.Process, s.opts.Processes) {
 			continue
 		}
 
@@ -303,61 +340,42 @@ func (s *Streamer) runLogStream(ctx context.Context) error {
 		select {
 		case s.logs <- *entry:
 		case <-ctx.Done():
-			return ctx.Err()
+			break Loop
 		default:
-			// Channel full, entry already in buffer
+			s.mu.Lock()
+			s.chanDropped++
+			s.mu.Unlock()
 		}
 	}
 
-	return cmd.Wait()
+	stdoutErr := scanner.Err()
+	if stdoutErr != nil && errors.Is(stdoutErr, bufio.ErrTooLong) {
+		stdoutErr = fmt.Errorf("log stream output line too long (>%d bytes): %w", maxLineBytes, stdoutErr)
+	}
+	if stdoutErr != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+	}
+
+	waitErr := cmd.Wait()
+	stderrErr := <-stderrErrCh
+
+	if stdoutErr != nil {
+		return stdoutErr
+	}
+	if stderrErr != nil && ctx.Err() == nil {
+		return fmt.Errorf("log stream stderr read error: %w", stderrErr)
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return waitErr
 }
 
 // buildPredicate constructs an NSPredicate string for log filtering
 // Uses AND between groups (subsystem, category) for narrowing results
 // Uses OR within groups for matching any of multiple values
 func (s *Streamer) buildPredicate() string {
-	// If raw predicate provided, use it directly
-	if s.opts.RawPredicate != "" {
-		return s.opts.RawPredicate
-	}
-
-	var groups []string
-
-	// Subsystem group: bundle ID and/or explicit subsystems (OR within group)
-	var subsystemParts []string
-	if s.opts.BundleID != "" {
-		subsystemParts = append(subsystemParts, fmt.Sprintf(`subsystem BEGINSWITH "%s"`, s.opts.BundleID))
-	}
-	for _, sub := range s.opts.Subsystems {
-		subsystemParts = append(subsystemParts, fmt.Sprintf(`subsystem == "%s"`, sub))
-	}
-	if len(subsystemParts) > 0 {
-		if len(subsystemParts) == 1 {
-			groups = append(groups, subsystemParts[0])
-		} else {
-			groups = append(groups, "("+strings.Join(subsystemParts, " OR ")+")")
-		}
-	}
-
-	// Category group (OR within group)
-	var categoryParts []string
-	for _, cat := range s.opts.Categories {
-		categoryParts = append(categoryParts, fmt.Sprintf(`category == "%s"`, cat))
-	}
-	if len(categoryParts) > 0 {
-		if len(categoryParts) == 1 {
-			groups = append(groups, categoryParts[0])
-		} else {
-			groups = append(groups, "("+strings.Join(categoryParts, " OR ")+")")
-		}
-	}
-
-	if len(groups) == 0 {
-		return ""
-	}
-
-	// AND between groups for narrowing
-	return strings.Join(groups, " AND ")
+	return buildPredicate(s.opts.RawPredicate, s.opts.BundleID, s.opts.Subsystems, s.opts.Categories)
 }
 
 // shouldExcludeSubsystem checks if a subsystem should be excluded
@@ -370,44 +388,6 @@ func (s *Streamer) shouldExcludeSubsystem(subsystem string) bool {
 				return true
 			}
 		} else if subsystem == excl {
-			return true
-		}
-	}
-	return false
-}
-
-// matchProcess checks if a process matches the filter list
-func (s *Streamer) matchProcess(process string) bool {
-	for _, p := range s.opts.Processes {
-		if p == "" {
-			continue
-		}
-
-		// Regex notation: re:<pattern> or /pattern/
-		if strings.HasPrefix(p, "re:") {
-			if re, err := regexp.Compile(p[3:]); err == nil && re.MatchString(process) {
-				return true
-			}
-			continue
-		}
-		if strings.HasPrefix(p, "/") && strings.HasSuffix(p, "/") && len(p) > 1 {
-			pat := strings.TrimSuffix(strings.TrimPrefix(p, "/"), "/")
-			if re, err := regexp.Compile(pat); err == nil && re.MatchString(process) {
-				return true
-			}
-			continue
-		}
-
-		// Glob/prefix matching when wildcards are present
-		if strings.ContainsAny(p, "*?[") {
-			if ok, _ := filepath.Match(p, process); ok {
-				return true
-			}
-			continue
-		}
-
-		// Exact match fallback
-		if process == p {
 			return true
 		}
 	}
@@ -506,4 +486,28 @@ func (s *Streamer) GetDropped() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.dropped
+}
+
+type StreamDiagnostics struct {
+	Reconnects          int
+	ParseDrops          int
+	TimestampParseDrops int
+	ChannelDrops        int
+	Buffered            int
+}
+
+func (s *Streamer) GetDiagnostics() StreamDiagnostics {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	bufCount := 0
+	if s.buffer != nil {
+		bufCount = s.buffer.Count()
+	}
+	return StreamDiagnostics{
+		Reconnects:          s.reconnects,
+		ParseDrops:          s.dropped,
+		TimestampParseDrops: s.tsDropped,
+		ChannelDrops:        s.chanDropped,
+		Buffered:            bufCount,
+	}
 }

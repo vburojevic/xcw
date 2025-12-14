@@ -143,11 +143,7 @@ func (c *PickCmd) pickApp(ctx context.Context, globals *Globals) error {
 	var device *domain.Device
 	var err error
 
-	if c.Simulator != "" {
-		device, err = mgr.FindDevice(ctx, c.Simulator)
-	} else {
-		device, err = mgr.FindBootedDevice(ctx)
-	}
+	device, err = resolveSimulatorDevice(ctx, mgr, c.Simulator, false)
 	if err != nil {
 		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error())
 	}

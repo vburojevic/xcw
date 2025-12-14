@@ -3,6 +3,7 @@ package simulator
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -27,6 +28,10 @@ type QueryOptions struct {
 	Until             time.Time        // End time (default: now)
 	Limit             int              // Max entries to return
 	RawPredicate      string           // Raw NSPredicate string (overrides other filters)
+
+	// Diagnostics
+	CommandTimeout time.Duration     // Optional timeout for the xcrun log show command
+	OnStderrLine   func(line string) // Optional callback for xcrun stderr output (trimmed)
 }
 
 // QueryReader reads historical logs from a simulator
@@ -45,19 +50,52 @@ func NewQueryReader() *QueryReader {
 func (r *QueryReader) Query(ctx context.Context, udid string, opts QueryOptions) ([]domain.LogEntry, error) {
 	args := r.buildArgs(udid, opts)
 
-	cmd := exec.CommandContext(ctx, "xcrun", args...)
+	cmdCtx := ctx
+	cancel := func() {}
+	if opts.CommandTimeout > 0 {
+		cmdCtx, cancel = context.WithTimeout(ctx, opts.CommandTimeout)
+	} else if _, ok := ctx.Deadline(); !ok {
+		// Default guardrail to prevent hung xcrun calls when no deadline is set.
+		cmdCtx, cancel = context.WithTimeout(ctx, 2*time.Minute)
+	}
+	defer cancel()
+
+	cmd := exec.CommandContext(cmdCtx, "xcrun", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pipe: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start log show: %w", err)
 	}
 
+	// Drain stderr to avoid deadlocks and optionally surface diagnostics.
+	stderrErrCh := make(chan error, 1)
+	onStderr := opts.OnStderrLine
+	go func() {
+		sc := bufio.NewScanner(stderr)
+		sc.Buffer(make([]byte, 0, 64*1024), 256*1024)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			if onStderr != nil {
+				onStderr(line)
+			}
+		}
+		stderrErrCh <- sc.Err()
+	}()
+
 	var entries []domain.LogEntry
 	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	const maxLineBytes = 1024 * 1024
+	scanner.Buffer(make([]byte, 0, 64*1024), maxLineBytes)
 
 	for scanner.Scan() {
 		entry, err := r.parser.Parse(scanner.Bytes())
@@ -106,8 +144,28 @@ func (r *QueryReader) Query(ctx context.Context, udid string, opts QueryOptions)
 		}
 	}
 
-	if err := cmd.Wait(); err != nil {
-		return entries, fmt.Errorf("log show failed: %w", err)
+	stdoutErr := scanner.Err()
+	if stdoutErr != nil && errors.Is(stdoutErr, bufio.ErrTooLong) {
+		stdoutErr = fmt.Errorf("log show output line too long (>%d bytes): %w", maxLineBytes, stdoutErr)
+	}
+	if stdoutErr != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+	}
+
+	waitErr := cmd.Wait()
+	stderrErr := <-stderrErrCh
+
+	if stdoutErr != nil {
+		return nil, stdoutErr
+	}
+	if stderrErr != nil && cmdCtx.Err() == nil {
+		return nil, fmt.Errorf("log show stderr read error: %w", stderrErr)
+	}
+	if cmdCtx.Err() != nil {
+		return nil, cmdCtx.Err()
+	}
+	if waitErr != nil {
+		return nil, fmt.Errorf("log show failed: %w", waitErr)
 	}
 	return entries, nil
 }
@@ -142,48 +200,7 @@ func (r *QueryReader) buildArgs(udid string, opts QueryOptions) []string {
 // Uses AND between groups (subsystem, category) for narrowing results
 // Uses OR within groups for matching any of multiple values
 func (r *QueryReader) buildPredicate(opts QueryOptions) string {
-	// If raw predicate provided, use it directly
-	if opts.RawPredicate != "" {
-		return opts.RawPredicate
-	}
-
-	var groups []string
-
-	// Subsystem group: bundle ID and/or explicit subsystems (OR within group)
-	var subsystemParts []string
-	if opts.BundleID != "" {
-		subsystemParts = append(subsystemParts, fmt.Sprintf(`subsystem BEGINSWITH "%s"`, opts.BundleID))
-	}
-	for _, sub := range opts.Subsystems {
-		subsystemParts = append(subsystemParts, fmt.Sprintf(`subsystem == "%s"`, sub))
-	}
-	if len(subsystemParts) > 0 {
-		if len(subsystemParts) == 1 {
-			groups = append(groups, subsystemParts[0])
-		} else {
-			groups = append(groups, "("+strings.Join(subsystemParts, " OR ")+")")
-		}
-	}
-
-	// Category group (OR within group)
-	var categoryParts []string
-	for _, cat := range opts.Categories {
-		categoryParts = append(categoryParts, fmt.Sprintf(`category == "%s"`, cat))
-	}
-	if len(categoryParts) > 0 {
-		if len(categoryParts) == 1 {
-			groups = append(groups, categoryParts[0])
-		} else {
-			groups = append(groups, "("+strings.Join(categoryParts, " OR ")+")")
-		}
-	}
-
-	if len(groups) == 0 {
-		return ""
-	}
-
-	// AND between groups for narrowing
-	return strings.Join(groups, " AND ")
+	return buildPredicate(opts.RawPredicate, opts.BundleID, opts.Subsystems, opts.Categories)
 }
 
 func formatDuration(d time.Duration) string {
@@ -212,16 +229,6 @@ func shouldExcludeSubsystem(subsystem string, excludeList []string) bool {
 				return true
 			}
 		} else if subsystem == excl {
-			return true
-		}
-	}
-	return false
-}
-
-// matchProcess checks if a process matches the filter list
-func matchProcess(process string, processes []string) bool {
-	for _, p := range processes {
-		if process == p {
 			return true
 		}
 	}

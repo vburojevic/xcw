@@ -52,6 +52,21 @@ type Heartbeat struct {
 	LastSeenTimestamp string `json:"last_seen_timestamp,omitempty"`
 }
 
+// StreamStats provides lightweight diagnostics about the active stream.
+type StreamStats struct {
+	Type                string `json:"type"` // Always "stats"
+	SchemaVersion       int    `json:"schemaVersion"`
+	Timestamp           string `json:"timestamp"`
+	TailID              string `json:"tail_id,omitempty"`
+	Session             int    `json:"session,omitempty"`
+	Reconnects          int    `json:"reconnects,omitempty"`
+	ParseDrops          int    `json:"parse_drops,omitempty"`
+	TimestampParseDrops int    `json:"timestamp_parse_drops,omitempty"`
+	ChannelDrops        int    `json:"channel_drops,omitempty"`
+	Buffered            int    `json:"buffered,omitempty"`
+	LastSeenTimestamp   string `json:"last_seen_timestamp,omitempty"`
+}
+
 // InfoOutput represents an informational message
 type InfoOutput struct {
 	Type          string `json:"type"` // Always "info"
@@ -200,11 +215,23 @@ func (w *NDJSONWriter) Write(entry *domain.LogEntry) error {
 
 // WriteSessionStart outputs a session start event
 func (w *NDJSONWriter) WriteSessionStart(session *domain.SessionStart) error {
+	if session.Type == "" {
+		session.Type = "session_start"
+	}
+	if session.SchemaVersion == 0 {
+		session.SchemaVersion = SchemaVersion
+	}
 	return w.encoder.Encode(session)
 }
 
 // WriteSessionEnd outputs a session end event
 func (w *NDJSONWriter) WriteSessionEnd(session *domain.SessionEnd) error {
+	if session.Type == "" {
+		session.Type = "session_end"
+	}
+	if session.SchemaVersion == 0 {
+		session.SchemaVersion = SchemaVersion
+	}
 	return w.encoder.Encode(session)
 }
 
@@ -231,7 +258,26 @@ func (w *NDJSONWriter) WriteRaw(v interface{}) error {
 
 // WriteHeartbeat outputs a heartbeat keepalive message
 func (w *NDJSONWriter) WriteHeartbeat(h *Heartbeat) error {
+	if h.Type == "" {
+		h.Type = "heartbeat"
+	}
+	if h.SchemaVersion == 0 {
+		h.SchemaVersion = SchemaVersion
+	}
+	if h.ContractVersion == 0 {
+		h.ContractVersion = 1
+	}
 	return w.encoder.Encode(h)
+}
+
+func (w *NDJSONWriter) WriteStats(s *StreamStats) error {
+	if s.Type == "" {
+		s.Type = "stats"
+	}
+	if s.SchemaVersion == 0 {
+		s.SchemaVersion = SchemaVersion
+	}
+	return w.encoder.Encode(s)
 }
 
 // WriteInfo outputs an informational message

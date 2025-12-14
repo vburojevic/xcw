@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +26,13 @@ type Manager struct {
 	cachedDevices []domain.Device
 	cacheAt       time.Time
 }
+
+const (
+	simctlListDevicesTimeout     = 10 * time.Second
+	simctlBootTimeout            = 30 * time.Second
+	simctlShutdownTimeout        = 30 * time.Second
+	simctlGetAppContainerTimeout = 10 * time.Second
+)
 
 // NewManager creates a new simulator manager
 func NewManager() *Manager {
@@ -47,7 +55,9 @@ func (m *Manager) ListDevices(ctx context.Context) ([]domain.Device, error) {
 	}
 	m.cacheMu.Unlock()
 
-	cmd := exec.CommandContext(ctx, m.xcrunPath, "simctl", "list", "devices", "--json")
+	cmdCtx, cancel := context.WithTimeout(ctx, simctlListDevicesTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(cmdCtx, m.xcrunPath, "simctl", "list", "devices", "--json")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("simctl list failed: %w", err)
@@ -121,11 +131,32 @@ type MultipleBootedError struct {
 }
 
 func (e *MultipleBootedError) Error() string {
+	// Show most recently booted first, then stable by name/UDID.
+	devs := make([]domain.Device, len(e.Devices))
+	copy(devs, e.Devices)
+	sort.SliceStable(devs, func(i, j int) bool {
+		a := devs[i].LastBootedAt
+		b := devs[j].LastBootedAt
+		switch {
+		case a == nil && b == nil:
+			return devs[i].Name < devs[j].Name
+		case a == nil:
+			return false
+		case b == nil:
+			return true
+		default:
+			if a.Equal(*b) {
+				return devs[i].Name < devs[j].Name
+			}
+			return a.After(*b)
+		}
+	})
+
 	var names []string
-	for _, d := range e.Devices {
+	for _, d := range devs {
 		names = append(names, fmt.Sprintf("%s (%s)", d.Name, d.UDID))
 	}
-	return fmt.Sprintf("multiple booted simulators found:\n  %s\nUse --simulator to specify one", strings.Join(names, "\n  "))
+	return fmt.Sprintf("multiple booted simulators found (most recent first):\n  %s\nUse --simulator to specify one (or run `xcw pick simulator`)", strings.Join(names, "\n  "))
 }
 
 // AmbiguousDeviceError is returned when a fuzzy search matches multiple devices
@@ -200,7 +231,9 @@ func (m *Manager) FindDevice(ctx context.Context, nameOrUDID string) (*domain.De
 
 // BootDevice boots a simulator by UDID
 func (m *Manager) BootDevice(ctx context.Context, udid string) error {
-	cmd := exec.CommandContext(ctx, m.xcrunPath, "simctl", "boot", udid)
+	cmdCtx, cancel := context.WithTimeout(ctx, simctlBootTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(cmdCtx, m.xcrunPath, "simctl", "boot", udid)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Check if already booted
@@ -214,7 +247,9 @@ func (m *Manager) BootDevice(ctx context.Context, udid string) error {
 
 // ShutdownDevice shuts down a simulator by UDID
 func (m *Manager) ShutdownDevice(ctx context.Context, udid string) error {
-	cmd := exec.CommandContext(ctx, m.xcrunPath, "simctl", "shutdown", udid)
+	cmdCtx, cancel := context.WithTimeout(ctx, simctlShutdownTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(cmdCtx, m.xcrunPath, "simctl", "shutdown", udid)
 	return cmd.Run()
 }
 
@@ -241,7 +276,9 @@ func (m *Manager) GetAppInfo(ctx context.Context, udid, bundleID string) (versio
 	}
 
 	// Get app container path
-	cmd := exec.CommandContext(ctx, m.xcrunPath, "simctl", "get_app_container", udid, bundleID, "--app")
+	cmdCtx, cancel := context.WithTimeout(ctx, simctlGetAppContainerTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(cmdCtx, m.xcrunPath, "simctl", "get_app_container", udid, bundleID, "--app")
 	containerPathBytes, err := cmd.Output()
 	if err != nil {
 		return "", "", fmt.Errorf("get_app_container failed: %w", err)

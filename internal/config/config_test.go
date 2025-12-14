@@ -300,6 +300,48 @@ func TestFindConfigFile(t *testing.T) {
 	})
 }
 
+func TestComputeSourcesPrecedence(t *testing.T) {
+	meta := &LoadMeta{
+		InConfig: map[string]bool{
+			"format":         true,
+			"defaults.app":   true,
+			"tail.simulator": true,
+		},
+		EnvSet: map[string]bool{
+			"XCW_FORMAT":         true,
+			"XCW_APP":            true,
+			"XCW_TAIL_SIMULATOR": true,
+		},
+	}
+
+	t.Run("flag wins over env/config/default", func(t *testing.T) {
+		sources := ComputeSources(meta, map[string]bool{"format": true})
+		require.Equal(t, string(SourceFlag), sources["format"])
+	})
+
+	t.Run("env wins over config/default", func(t *testing.T) {
+		sources := ComputeSources(meta, map[string]bool{})
+		require.Equal(t, string(SourceEnv), sources["format"])
+		require.Equal(t, string(SourceEnv), sources["defaults.app"])
+		require.Equal(t, string(SourceEnv), sources["tail.simulator"])
+	})
+
+	t.Run("config wins over default", func(t *testing.T) {
+		metaNoEnv := &LoadMeta{InConfig: meta.InConfig, EnvSet: map[string]bool{}}
+		sources := ComputeSources(metaNoEnv, map[string]bool{})
+		require.Equal(t, string(SourceConfig), sources["format"])
+		require.Equal(t, string(SourceConfig), sources["defaults.app"])
+		require.Equal(t, string(SourceConfig), sources["tail.simulator"])
+	})
+
+	t.Run("default when nothing set", func(t *testing.T) {
+		sources := ComputeSources(&LoadMeta{InConfig: map[string]bool{}, EnvSet: map[string]bool{}}, nil)
+		require.Equal(t, string(SourceDefault), sources["format"])
+		require.Equal(t, string(SourceDefault), sources["defaults.app"])
+		require.Equal(t, string(SourceDefault), sources["tail.simulator"])
+	})
+}
+
 func TestEnvOverridesViaViper(t *testing.T) {
 	t.Run("format overrides from env", func(t *testing.T) {
 		t.Setenv("XCW_FORMAT", "text")

@@ -16,7 +16,7 @@ func hintForDeviceLookup(err error) string {
 
 	var multi *simulator.MultipleBootedError
 	if errors.As(err, &multi) {
-		return "Pass --simulator to select one; try `xcw list --booted-only`"
+		return "Pass --simulator to select one; try `xcw list --booted-only` or `xcw pick simulator`"
 	}
 
 	var amb *simulator.AmbiguousDeviceError

@@ -26,22 +26,13 @@ func (c *DiscoverCmd) Run(globals *Globals) error {
 	ctx := context.Background()
 
 	// Validate mutual exclusivity of flags
-	if c.Simulator != "" && c.Booted {
+	if globals.FlagProvided("simulator") && globals.FlagProvided("booted") {
 		return c.outputError(globals, "INVALID_FLAGS", "--simulator and --booted are mutually exclusive")
 	}
 
 	// Find the simulator
 	mgr := simulator.NewManager()
-	var device *domain.Device
-	var err error
-
-	if c.Simulator != "" {
-		globals.Debug("Finding simulator by name/UDID: %s", c.Simulator)
-		device, err = mgr.FindDevice(ctx, c.Simulator)
-	} else {
-		globals.Debug("Finding booted simulator (auto-detect)")
-		device, err = mgr.FindBootedDevice(ctx)
-	}
+	device, err := resolveSimulatorDevice(ctx, mgr, c.Simulator, c.Booted)
 	if err != nil {
 		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error(), hintForStreamOrQuery(err))
 	}
@@ -83,11 +74,20 @@ func (c *DiscoverCmd) Run(globals *Globals) error {
 
 	// Create query reader with minimal filtering
 	reader := simulator.NewQueryReader()
+	var diagEmitter *output.Emitter
+	if globals.Format == "ndjson" {
+		diagEmitter = output.NewEmitter(globals.Stdout)
+	}
 	opts := simulator.QueryOptions{
 		BundleID: c.App,
 		MinLevel: domain.LogLevelDebug, // Get all levels
 		Since:    since,
 		Limit:    c.Limit,
+	}
+	if globals.Verbose {
+		opts.OnStderrLine = func(line string) {
+			emitWarning(globals, diagEmitter, "xcrun_stderr: "+line)
+		}
 	}
 
 	// Execute query

@@ -312,7 +312,7 @@ xcw replay session.ndjson --realtime --speed 2.0
 `xcw` reads settings in this order (highest wins): **CLI flags → environment variables → config file → built-in defaults**. This keeps AI agents predictable when they reuse the same tail session across relaunches.
 
 - **Environment**: prefix every key with `XCW_`. Common shortcuts: `XCW_FORMAT`, `XCW_LEVEL`, `XCW_QUIET`, `XCW_VERBOSE`, `XCW_APP`, `XCW_SIMULATOR`. Nested keys work too: `XCW_TAIL_HEARTBEAT=2s`, `XCW_QUERY_LIMIT=200`, `XCW_WATCH_COOLDOWN=1s`.
-- **Config file locations** (first found is used): `./.xcw.yaml`, `~/.config/xcw/config.yaml`, `/etc/xcw/config.yaml`.
+- **Config file locations** (first found is used): `./.xcw.yaml`/`./.xcw.yml`/`./xcw.yaml`/`./xcw.yml`, then `~/.xcw.yaml`/`~/.xcw.yml`, then `~/.config/xcw/config.yaml` (or `$XDG_CONFIG_HOME/xcw/config.yaml`), then `/etc/xcw/config.yaml`.
 - **Per-command defaults**: set sticky values without repeating flags:
 
 ```yaml
@@ -460,7 +460,7 @@ This allows AI agents to keep `xcw tail` running continuously while you rebuild 
 
 ## Output format & JSON schema
 
-By default `xcw` writes NDJSON to stdout.  Each event includes a `type` and `schemaVersion` field.  Types include `log`, `console`, `ready`, `summary`, `analysis`, `heartbeat`, `error`, `info`, `warning`, `tmux`, `trigger`, `app`, `doctor`, `pick`, `session`, `session_start` and `session_end`.  The current schema version is `1`.
+By default `xcw` writes NDJSON to stdout.  Each event includes a `type` and `schemaVersion` field.  Types include `log`, `metadata`, `ready`, `heartbeat`, `stats`, `summary`, `analysis`, `session_start`, `session_end`, `clear_buffer`, `reconnect_notice`, `cutoff_reached`, `console`, `simulator`, `app`, `doctor`, `pick`, and `session`.  The current schema version is `1`.
 
 Example log entry:
 
@@ -483,8 +483,43 @@ xcw schema > xcw-schema.json
 # specific types only
 xcw schema --type log,error,summary
 
-# the canonical schema file lives in this repo at schemas/v1/xcw-schema.json
+# the canonical schema file lives in this repo at schemas/generated.schema.json
 ```
+
+## Troubleshooting
+
+### `--booted` errors / multiple booted simulators
+
+If you see errors like “multiple booted simulators”, either:
+
+- Specify a simulator explicitly: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp`
+- Or pick one interactively: `xcw pick simulator`
+- Or shut down the extra simulators: `xcrun simctl shutdown <udid>`
+
+### `xcrun` / Xcode toolchain issues
+
+`xcw` relies on `xcrun simctl` and `log stream`. If `xcrun` fails:
+
+- Ensure Xcode and Command Line Tools are installed (`xcode-select -p`).
+- Open Xcode once after updating to accept the license.
+- Try `xcw doctor` for a quick environment check and actionable hints.
+
+### No logs / wrong filters
+
+- Verify the bundle ID: `xcw apps` (then use `-a <bundle_id>`).
+- Use `xcw discover --since 5m` to learn valid subsystems/categories/processes before filtering.
+- Remember: `print()` doesn’t show up in `xcw tail` (use `xcw launch` to capture stdout/stderr).
+
+### Quoting predicates / regex
+
+Shell quoting bites. Prefer quoting complex predicates/expressions:
+
+- `xcw tail --where '(level=error OR level=fault) AND message~timeout'`
+- `xcw tail --where 'message~/timeout|crash/i'`
+
+### Stream reconnects and gaps
+
+If you see `reconnect_notice`, there may be log gaps. Run with `-v/--verbose` to surface diagnostics (including `xcrun` stderr) and watch `heartbeat.last_seen_timestamp` to detect stalls.
 
 ## Global flags
 

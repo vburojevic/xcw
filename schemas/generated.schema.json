@@ -1,6 +1,97 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "definitions": {
+    "agent_hints": {
+      "description": "Runtime contract guidance for AI agents consuming NDJSON",
+      "properties": {
+        "contract_version": {
+          "description": "Agent contract version",
+          "type": "integer"
+        },
+        "hints": {
+          "description": "List of runtime hints for agents",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "recommended_scope": {
+          "description": "Recommended correlation scope (eg. tail_id + latest session only)",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "session": {
+          "description": "Current session number",
+          "type": "integer"
+        },
+        "tail_id": {
+          "description": "Tail invocation identifier",
+          "type": "string"
+        },
+        "type": {
+          "const": "agent_hints",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "contract_version",
+        "hints"
+      ],
+      "title": "Agent Hints",
+      "type": "object"
+    },
+    "analysis": {
+      "description": "Analyzer output containing a summary and detected patterns",
+      "properties": {
+        "known_pattern_count": {
+          "description": "Number of previously known patterns (when persistence enabled)",
+          "type": "integer"
+        },
+        "new_pattern_count": {
+          "description": "Number of newly observed patterns (when persistence enabled)",
+          "type": "integer"
+        },
+        "patterns": {
+          "description": "Detected error/fault patterns",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "summary": {
+          "description": "Log summary object",
+          "type": "object"
+        },
+        "timestamp": {
+          "description": "When the analysis was produced",
+          "format": "date-time",
+          "type": "string"
+        },
+        "type": {
+          "const": "analysis",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "timestamp",
+        "summary"
+      ],
+      "title": "Analysis",
+      "type": "object"
+    },
     "app": {
       "description": "Information about an installed app on the simulator",
       "properties": {
@@ -50,6 +141,318 @@
         "app_type"
       ],
       "title": "Installed App",
+      "type": "object"
+    },
+    "apps_summary": {
+      "description": "Summary row emitted after listing apps",
+      "properties": {
+        "device": {
+          "description": "Simulator name",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "total": {
+          "description": "Total number of apps emitted",
+          "type": "integer"
+        },
+        "type": {
+          "const": "apps_summary",
+          "type": "string"
+        },
+        "udid": {
+          "description": "Simulator UDID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "total"
+      ],
+      "title": "Apps Summary",
+      "type": "object"
+    },
+    "clear_buffer": {
+      "description": "Instructs consumers to reset caches at a session boundary",
+      "properties": {
+        "hints": {
+          "description": "Optional recovery hints for consumers",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reason": {
+          "description": "Reason for buffer reset (session_start, session_end, idle_timeout, etc.)",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "session": {
+          "description": "Session number",
+          "type": "integer"
+        },
+        "tail_id": {
+          "description": "Tail invocation identifier",
+          "type": "string"
+        },
+        "type": {
+          "const": "clear_buffer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "reason"
+      ],
+      "title": "Clear Buffer",
+      "type": "object"
+    },
+    "config": {
+      "description": "Effective configuration and provenance information",
+      "properties": {
+        "config_file": {
+          "description": "Config file path used (if any)",
+          "type": "string"
+        },
+        "defaults": {
+          "description": "Global defaults section",
+          "type": "object"
+        },
+        "format": {
+          "description": "Effective output format",
+          "type": "string"
+        },
+        "level": {
+          "description": "Effective minimum log level",
+          "type": "string"
+        },
+        "query": {
+          "description": "Query defaults section",
+          "type": "object"
+        },
+        "quiet": {
+          "description": "Effective quiet mode",
+          "type": "boolean"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "sources": {
+          "description": "Per-key provenance map: flag|env|config|default",
+          "type": "object"
+        },
+        "tail": {
+          "description": "Tail defaults section",
+          "type": "object"
+        },
+        "type": {
+          "const": "config",
+          "type": "string"
+        },
+        "verbose": {
+          "description": "Effective verbose mode",
+          "type": "boolean"
+        },
+        "watch": {
+          "description": "Watch defaults section",
+          "type": "object"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion"
+      ],
+      "title": "Config",
+      "type": "object"
+    },
+    "config_path": {
+      "description": "Config file path resolution result",
+      "properties": {
+        "path": {
+          "description": "Config file path (empty if not found)",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "type": {
+          "const": "config_path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "path"
+      ],
+      "title": "Config Path",
+      "type": "object"
+    },
+    "console": {
+      "description": "A line of stdout/stderr from `xcw launch`",
+      "properties": {
+        "message": {
+          "description": "Console line",
+          "type": "string"
+        },
+        "pid": {
+          "description": "PID (when available)",
+          "type": "integer"
+        },
+        "process": {
+          "description": "App bundle ID (when known)",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "stream": {
+          "description": "Which stream produced the line",
+          "enum": [
+            "stdout",
+            "stderr"
+          ],
+          "type": "string"
+        },
+        "timestamp": {
+          "description": "When the line was emitted",
+          "format": "date-time",
+          "type": "string"
+        },
+        "type": {
+          "const": "console",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "timestamp",
+        "stream",
+        "message"
+      ],
+      "title": "Console Output",
+      "type": "object"
+    },
+    "cutoff_reached": {
+      "description": "Emitted when max-duration or max-logs cutoff stops streaming",
+      "properties": {
+        "reason": {
+          "description": "Cutoff reason (max_duration, max_logs, sigint, etc.)",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "session": {
+          "description": "Session number at cutoff time",
+          "type": "integer"
+        },
+        "tail_id": {
+          "description": "Tail invocation identifier",
+          "type": "string"
+        },
+        "total_logs": {
+          "description": "Total logs emitted before cutoff",
+          "type": "integer"
+        },
+        "type": {
+          "const": "cutoff_reached",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "reason"
+      ],
+      "title": "Cutoff Reached",
+      "type": "object"
+    },
+    "discovery": {
+      "description": "Discovery results showing subsystems, categories, processes, and levels",
+      "properties": {
+        "app": {
+          "description": "App bundle identifier (when filtering by app)",
+          "type": "string"
+        },
+        "categories": {
+          "description": "Category aggregates",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "levels": {
+          "description": "Level histogram",
+          "type": "object"
+        },
+        "processes": {
+          "description": "Process aggregates",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "subsystems": {
+          "description": "Subsystem aggregates",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "time_range": {
+          "description": "Start/end time range",
+          "properties": {
+            "end": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "start": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "total_count": {
+          "description": "Total number of logs analyzed",
+          "type": "integer"
+        },
+        "type": {
+          "const": "discovery",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "time_range",
+        "total_count"
+      ],
+      "title": "Discovery",
       "type": "object"
     },
     "doctor": {
@@ -200,6 +603,19 @@
     "heartbeat": {
       "description": "Keepalive message indicating stream is active",
       "properties": {
+        "contract_version": {
+          "description": "Agent contract version for heartbeat semantics",
+          "type": "integer"
+        },
+        "last_seen_timestamp": {
+          "description": "Timestamp of the most recently emitted log entry",
+          "format": "date-time",
+          "type": "string"
+        },
+        "latest_session": {
+          "description": "Latest session number observed",
+          "type": "integer"
+        },
         "logs_since_last": {
           "description": "Number of logs since last heartbeat",
           "type": "integer"
@@ -208,6 +624,10 @@
           "const": 1,
           "description": "Schema version for compatibility detection",
           "type": "integer"
+        },
+        "tail_id": {
+          "description": "Tail invocation identifier",
+          "type": "string"
         },
         "timestamp": {
           "description": "ISO8601 timestamp of the heartbeat",
@@ -301,8 +721,16 @@
           "description": "Schema version for compatibility detection",
           "type": "integer"
         },
+        "session": {
+          "description": "Session number (1, 2, 3...) when session tracking is active",
+          "type": "integer"
+        },
         "subsystem": {
           "description": "Subsystem identifier (usually bundle ID)",
+          "type": "string"
+        },
+        "tail_id": {
+          "description": "Tail invocation ID",
           "type": "string"
         },
         "timestamp": {
@@ -325,6 +753,45 @@
         "message"
       ],
       "title": "Log Entry",
+      "type": "object"
+    },
+    "metadata": {
+      "description": "Tool metadata emitted at tail start for agents",
+      "properties": {
+        "build_date": {
+          "description": "Build date (optional)",
+          "type": "string"
+        },
+        "commit": {
+          "description": "git commit hash (short)",
+          "type": "string"
+        },
+        "contract_version": {
+          "description": "Agent contract version for stream semantics",
+          "type": "integer"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "type": {
+          "const": "metadata",
+          "type": "string"
+        },
+        "version": {
+          "description": "xcw version string",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "version",
+        "commit",
+        "contract_version"
+      ],
+      "title": "Metadata",
       "type": "object"
     },
     "pick": {
@@ -367,6 +834,92 @@
         "name"
       ],
       "title": "Pick Result",
+      "type": "object"
+    },
+    "ready": {
+      "description": "Signals that log capture is active and ready",
+      "properties": {
+        "app": {
+          "description": "App bundle identifier (when filtering by app)",
+          "type": "string"
+        },
+        "contract_version": {
+          "description": "Agent contract version for ready semantics",
+          "type": "integer"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "session": {
+          "description": "Current session number",
+          "type": "integer"
+        },
+        "simulator": {
+          "description": "Simulator display name",
+          "type": "string"
+        },
+        "tail_id": {
+          "description": "Tail invocation identifier",
+          "type": "string"
+        },
+        "timestamp": {
+          "description": "When capture became active",
+          "format": "date-time",
+          "type": "string"
+        },
+        "type": {
+          "const": "ready",
+          "type": "string"
+        },
+        "udid": {
+          "description": "Simulator UDID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "timestamp",
+        "simulator",
+        "udid",
+        "app"
+      ],
+      "title": "Ready",
+      "type": "object"
+    },
+    "reconnect_notice": {
+      "description": "Signals that the log stream reconnected; consumers should consider potential gaps",
+      "properties": {
+        "message": {
+          "description": "Reconnect message",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "severity": {
+          "description": "Severity label (info, warn, error)",
+          "type": "string"
+        },
+        "tail_id": {
+          "description": "Tail invocation identifier",
+          "type": "string"
+        },
+        "type": {
+          "const": "reconnect_notice",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "message"
+      ],
+      "title": "Reconnect Notice",
       "type": "object"
     },
     "rotation": {
@@ -498,6 +1051,254 @@
       "title": "Session Debug",
       "type": "object"
     },
+    "session_end": {
+      "description": "Emitted when an app session ends (PID changes or stream stops)",
+      "properties": {
+        "pid": {
+          "description": "Process ID that ended",
+          "type": "integer"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "session": {
+          "description": "Session number that ended",
+          "type": "integer"
+        },
+        "summary": {
+          "description": "Summary of the ended session",
+          "properties": {
+            "duration_seconds": {
+              "type": "integer"
+            },
+            "errors": {
+              "type": "integer"
+            },
+            "faults": {
+              "type": "integer"
+            },
+            "total_logs": {
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "tail_id": {
+          "description": "Tail invocation identifier",
+          "type": "string"
+        },
+        "type": {
+          "const": "session_end",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "session",
+        "pid",
+        "summary"
+      ],
+      "title": "Session End",
+      "type": "object"
+    },
+    "session_start": {
+      "description": "Emitted when a new app session begins (PID change detected)",
+      "properties": {
+        "alert": {
+          "description": "Alert string (eg. APP_RELAUNCHED) when previous session existed",
+          "type": "string"
+        },
+        "app": {
+          "description": "App bundle identifier",
+          "type": "string"
+        },
+        "binary_uuid": {
+          "description": "Mach-O UUID from process image",
+          "type": "string"
+        },
+        "build": {
+          "description": "App build number (CFBundleVersion)",
+          "type": "string"
+        },
+        "pid": {
+          "description": "Current process ID",
+          "type": "integer"
+        },
+        "previous_pid": {
+          "description": "Previous process ID (if app relaunched)",
+          "type": "integer"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "session": {
+          "description": "Session number (1, 2, 3...)",
+          "type": "integer"
+        },
+        "simulator": {
+          "description": "Simulator name",
+          "type": "string"
+        },
+        "tail_id": {
+          "description": "Tail invocation identifier",
+          "type": "string"
+        },
+        "timestamp": {
+          "description": "When the session started",
+          "format": "date-time",
+          "type": "string"
+        },
+        "type": {
+          "const": "session_start",
+          "type": "string"
+        },
+        "udid": {
+          "description": "Simulator UDID",
+          "type": "string"
+        },
+        "version": {
+          "description": "App version (CFBundleShortVersionString)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "session",
+        "pid",
+        "app",
+        "simulator",
+        "udid",
+        "timestamp"
+      ],
+      "title": "Session Start",
+      "type": "object"
+    },
+    "simulator": {
+      "description": "Simulator device information",
+      "properties": {
+        "dataPath": {
+          "description": "Simulator data path (optional)",
+          "type": "string"
+        },
+        "deviceTypeIdentifier": {
+          "description": "Device type identifier",
+          "type": "string"
+        },
+        "isAvailable": {
+          "description": "Whether the device is available",
+          "type": "boolean"
+        },
+        "lastBootedAt": {
+          "description": "Most recent boot time (optional)",
+          "format": "date-time",
+          "type": "string"
+        },
+        "logPath": {
+          "description": "Simulator log path (optional)",
+          "type": "string"
+        },
+        "name": {
+          "description": "Simulator name",
+          "type": "string"
+        },
+        "runtime": {
+          "description": "Runtime identifier (eg. iOS 18.0)",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "state": {
+          "description": "Current simulator state",
+          "type": "string"
+        },
+        "type": {
+          "const": "simulator",
+          "type": "string"
+        },
+        "udid": {
+          "description": "Simulator UDID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "udid",
+        "name",
+        "state",
+        "runtime"
+      ],
+      "title": "Simulator",
+      "type": "object"
+    },
+    "stats": {
+      "description": "Periodic stream diagnostics emitted alongside heartbeats",
+      "properties": {
+        "buffered": {
+          "description": "Approximate number of buffered log entries",
+          "type": "integer"
+        },
+        "channel_drops": {
+          "description": "Number of dropped log entries due to backpressure",
+          "type": "integer"
+        },
+        "last_seen_timestamp": {
+          "description": "Timestamp of the most recently emitted log entry",
+          "format": "date-time",
+          "type": "string"
+        },
+        "parse_drops": {
+          "description": "Number of NDJSON parse drops",
+          "type": "integer"
+        },
+        "reconnects": {
+          "description": "Number of reconnects since tail start",
+          "type": "integer"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "session": {
+          "description": "Current session number",
+          "type": "integer"
+        },
+        "tail_id": {
+          "description": "Tail invocation identifier",
+          "type": "string"
+        },
+        "timestamp": {
+          "description": "When the stats snapshot was taken",
+          "format": "date-time",
+          "type": "string"
+        },
+        "timestamp_parse_drops": {
+          "description": "Number of timestamp parse drops",
+          "type": "integer"
+        },
+        "type": {
+          "const": "stats",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "timestamp"
+      ],
+      "title": "Stats",
+      "type": "object"
+    },
     "summary": {
       "description": "Periodic summary of log statistics",
       "properties": {
@@ -537,6 +1338,10 @@
           "const": 1,
           "description": "Schema version for compatibility detection",
           "type": "integer"
+        },
+        "tail_id": {
+          "description": "Tail invocation identifier",
+          "type": "string"
         },
         "topErrors": {
           "description": "Most common error messages",
@@ -631,6 +1436,36 @@
         "command"
       ],
       "title": "Trigger Event",
+      "type": "object"
+    },
+    "trigger_error": {
+      "description": "Error emitted when a watch trigger command fails",
+      "properties": {
+        "command": {
+          "description": "Trigger command",
+          "type": "string"
+        },
+        "error": {
+          "description": "Error message",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1,
+          "description": "Schema version for compatibility detection",
+          "type": "integer"
+        },
+        "type": {
+          "const": "trigger_error",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "command",
+        "error"
+      ],
+      "title": "Trigger Error",
       "type": "object"
     },
     "update": {

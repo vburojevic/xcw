@@ -34,7 +34,7 @@ func (c *UICmd) Run(globals *Globals) error {
 	defer stop()
 
 	// Validate mutual exclusivity of flags
-	if c.Simulator != "" && c.Booted {
+	if globals.FlagProvided("simulator") && globals.FlagProvided("booted") {
 		return outputErrorCommon(globals, "INVALID_FLAGS", "--simulator and --booted are mutually exclusive", "use only one of --simulator or --booted")
 	}
 	if err := validateAppPredicateAll(c.App, c.Predicate, c.All, len(c.Subsystem) > 0 || len(c.Category) > 0); err != nil {
@@ -43,16 +43,7 @@ func (c *UICmd) Run(globals *Globals) error {
 
 	// Find the simulator
 	mgr := simulator.NewManager()
-	var device *domain.Device
-	var err error
-
-	if c.Simulator != "" {
-		globals.Debug("Finding simulator by name/UDID: %s", c.Simulator)
-		device, err = mgr.FindDevice(ctx, c.Simulator)
-	} else {
-		globals.Debug("Finding booted simulator (auto-detect)")
-		device, err = mgr.FindBootedDevice(ctx)
-	}
+	device, err := resolveSimulatorDevice(ctx, mgr, c.Simulator, c.Booted)
 	if err != nil {
 		return outputErrorCommon(globals, "DEVICE_NOT_FOUND", err.Error(), hintForStreamOrQuery(err))
 	}

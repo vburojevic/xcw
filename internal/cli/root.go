@@ -55,6 +55,13 @@ type Globals struct {
 	Stderr  io.Writer
 	Config  *config.Config
 	Logger  *zap.SugaredLogger
+	// FlagsSet contains the set of CLI flags explicitly provided by the user.
+	// Keys are Kong flag names (eg. "format", "simulator", "booted").
+	FlagsSet map[string]bool
+	// ConfigFile is the config file path that was loaded (if any).
+	ConfigFile string
+	// ConfigSources maps config keys to their effective source: flag|env|config|default.
+	ConfigSources map[string]string
 }
 
 // NewGlobals creates a new Globals instance from CLI flags
@@ -118,6 +125,13 @@ func NewGlobalsWithConfig(cli *CLI, cfg *config.Config) *Globals {
 	return g
 }
 
+func (g *Globals) FlagProvided(name string) bool {
+	if g == nil || g.FlagsSet == nil {
+		return false
+	}
+	return g.FlagsSet[name]
+}
+
 // Debug prints a debug message if verbose mode is enabled
 func (g *Globals) Debug(format string, args ...interface{}) {
 	if !g.Verbose {
@@ -155,6 +169,6 @@ func (v *VersionCmd) Run(globals *Globals) error {
 
 // Version information (set at build time)
 var (
-	Version = "0.17.1"
+	Version = "0.18.0"
 	Commit  = "none"
 )

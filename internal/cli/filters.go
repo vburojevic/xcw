@@ -39,15 +39,6 @@ func buildFilters(patternStr string, exclude []string, where []string) (*regexp.
 	return pattern, excludePatterns, whereFilter, nil
 }
 
-// buildPipeline composes pattern/exclude/where into a reusable matcher.
-func buildPipeline(patternStr string, exclude []string, where []string) (*filter.Pipeline, error) {
-	pat, excl, whereFilter, err := buildFilters(patternStr, exclude, where)
-	if err != nil {
-		return nil, err
-	}
-	return filter.NewPipeline(pat, excl, whereFilter), nil
-}
-
 // resolveLevels picks min/max level given cmd overrides and globals
 func resolveLevels(minOverride, maxOverride string, globalsMin string) (domain.LogLevel, domain.LogLevel) {
 	minLevel := globalsMin

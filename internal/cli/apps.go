@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os/exec"
 	"sort"
+	"time"
 
-	"github.com/vburojevic/xcw/internal/domain"
 	"github.com/vburojevic/xcw/internal/output"
 	"github.com/vburojevic/xcw/internal/simulator"
 	"howett.net/plist"
@@ -49,20 +49,13 @@ func (c *AppsCmd) Run(globals *Globals) error {
 	ctx := context.Background()
 
 	// Validate mutual exclusivity of flags
-	if c.Simulator != "" && c.Booted {
+	if globals.FlagProvided("simulator") && globals.FlagProvided("booted") {
 		return c.outputError(globals, "INVALID_FLAGS", "--simulator and --booted are mutually exclusive")
 	}
 
 	// Find the simulator
 	mgr := simulator.NewManager()
-	var device *domain.Device
-	var err error
-
-	if c.Simulator != "" {
-		device, err = mgr.FindDevice(ctx, c.Simulator)
-	} else {
-		device, err = mgr.FindBootedDevice(ctx)
-	}
+	device, err := resolveSimulatorDevice(ctx, mgr, c.Simulator, c.Booted)
 	if err != nil {
 		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error())
 	}
@@ -154,7 +147,9 @@ func (c *AppsCmd) Run(globals *Globals) error {
 }
 
 func (c *AppsCmd) getInstalledApps(ctx context.Context, udid string) ([]appInfo, error) {
-	cmd := exec.CommandContext(ctx, "xcrun", "simctl", "listapps", udid)
+	cmdCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(cmdCtx, "xcrun", "simctl", "listapps", udid)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("simctl listapps failed: %w", err)

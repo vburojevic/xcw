@@ -42,7 +42,7 @@ func (c *QueryCmd) Run(globals *Globals) error {
 	ctx := context.Background()
 
 	// Validate mutual exclusivity of flags
-	if c.Simulator != "" && c.Booted {
+	if globals.FlagProvided("simulator") && globals.FlagProvided("booted") {
 		return c.outputError(globals, "INVALID_FLAGS", "--simulator and --booted are mutually exclusive")
 	}
 	if err := validateAppPredicateAll(c.App, c.Predicate, c.All, len(c.Subsystem) > 0 || len(c.Category) > 0); err != nil {
@@ -51,16 +51,7 @@ func (c *QueryCmd) Run(globals *Globals) error {
 
 	// Find the simulator
 	mgr := simulator.NewManager()
-	var device *domain.Device
-	var err error
-
-	if c.Simulator != "" {
-		globals.Debug("Finding simulator by name/UDID: %s", c.Simulator)
-		device, err = mgr.FindDevice(ctx, c.Simulator)
-	} else {
-		globals.Debug("Finding booted simulator (auto-detect)")
-		device, err = mgr.FindBootedDevice(ctx)
-	}
+	device, err := resolveSimulatorDevice(ctx, mgr, c.Simulator, c.Booted)
 	if err != nil {
 		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error(), hintForStreamOrQuery(err))
 	}
@@ -82,11 +73,10 @@ func (c *QueryCmd) Run(globals *Globals) error {
 	}
 
 	// Compile filters (pattern, exclude, where)
-	pattern, excludePatterns, _, err := buildFilters(c.Pattern, c.Exclude, c.Where)
+	pattern, excludePatterns, whereFilter, err := buildFilters(c.Pattern, c.Exclude, c.Where)
 	if err != nil {
 		return c.outputError(globals, "INVALID_FILTER", err.Error(), hintForFilter(err))
 	}
-	pipeline, _ := buildPipeline(c.Pattern, c.Exclude, c.Where)
 
 	// Output query info if not quiet
 	if !globals.Quiet {
@@ -114,6 +104,10 @@ func (c *QueryCmd) Run(globals *Globals) error {
 
 	// Create query reader
 	reader := simulator.NewQueryReader()
+	var diagEmitter *output.Emitter
+	if globals.Format == "ndjson" {
+		diagEmitter = output.NewEmitter(globals.Stdout)
+	}
 	opts := simulator.QueryOptions{
 		BundleID:          c.App,
 		Subsystems:        c.Subsystem,
@@ -129,6 +123,11 @@ func (c *QueryCmd) Run(globals *Globals) error {
 		Limit:             c.Limit,
 		RawPredicate:      c.Predicate,
 	}
+	if globals.Verbose {
+		opts.OnStderrLine = func(line string) {
+			emitWarning(globals, diagEmitter, "xcrun_stderr: "+line)
+		}
+	}
 
 	// Execute query
 	globals.Debug("Query options: BundleID=%s, Since=%s, Limit=%d", opts.BundleID, opts.Since, opts.Limit)
@@ -139,16 +138,16 @@ func (c *QueryCmd) Run(globals *Globals) error {
 	}
 	globals.Debug("Query returned %d entries", len(entries))
 
-	// Apply pipeline filter if provided (defensive; streamer already filters)
-	if pipeline != nil {
-		globals.Debug("Pipeline filter: pattern/exclude=%d where=%d", len(c.Exclude), len(c.Where))
+	// Apply where filter after the query reader's filtering (pattern/exclude are already applied there).
+	if whereFilter != nil {
+		globals.Debug("Where filter: %d clause(s)", len(c.Where))
 		var filtered []domain.LogEntry
 		for _, entry := range entries {
-			if pipeline.Match(&entry) {
+			if whereFilter.Match(&entry) {
 				filtered = append(filtered, entry)
 			}
 		}
-		globals.Debug("After pipeline filter: %d entries (was %d)", len(filtered), len(entries))
+		globals.Debug("After where filter: %d entries (was %d)", len(filtered), len(entries))
 		entries = filtered
 	}
 

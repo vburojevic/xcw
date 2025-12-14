@@ -25,6 +25,81 @@ type Config struct {
 	Watch    WatchConfig    `mapstructure:"watch"`
 }
 
+// Source indicates where a config value came from after applying precedence.
+// Precedence: flags > env > config file > defaults.
+type Source string
+
+const (
+	SourceFlag    Source = "flag"
+	SourceEnv     Source = "env"
+	SourceConfig  Source = "config"
+	SourceDefault Source = "default"
+)
+
+type LoadMeta struct {
+	ConfigFile string
+	// InConfig is keyed by config keys (eg. "defaults.simulator") and indicates presence in the config file.
+	InConfig map[string]bool
+	// EnvSet is keyed by environment variable name (eg. "XCW_SIMULATOR") and indicates it is set (even if empty).
+	EnvSet map[string]bool
+}
+
+type keySpec struct {
+	Key      string
+	FlagName string
+	ExtraEnv []string
+}
+
+func configKeySpecs() []keySpec {
+	return []keySpec{
+		// Global keys (flags can override these).
+		{Key: "format", FlagName: "format"},
+		{Key: "level", FlagName: "level"},
+		{Key: "quiet", FlagName: "quiet"},
+		{Key: "verbose", FlagName: "verbose"},
+
+		// defaults.*
+		{Key: "defaults.simulator", ExtraEnv: []string{"XCW_SIMULATOR"}},
+		{Key: "defaults.app", ExtraEnv: []string{"XCW_APP"}},
+		{Key: "defaults.buffer_size"},
+		{Key: "defaults.summary_interval"},
+		{Key: "defaults.heartbeat"},
+		{Key: "defaults.subsystems"},
+		{Key: "defaults.categories"},
+		{Key: "defaults.since"},
+		{Key: "defaults.limit"},
+		{Key: "defaults.exclude_subsystems"},
+		{Key: "defaults.exclude_pattern"},
+
+		// tail.*
+		{Key: "tail.simulator", ExtraEnv: []string{"XCW_SIMULATOR"}},
+		{Key: "tail.app", ExtraEnv: []string{"XCW_APP"}},
+		{Key: "tail.summary_interval"},
+		{Key: "tail.heartbeat"},
+		{Key: "tail.session_idle"},
+		{Key: "tail.exclude"},
+		{Key: "tail.where"},
+
+		// query.*
+		{Key: "query.simulator", ExtraEnv: []string{"XCW_SIMULATOR"}},
+		{Key: "query.app", ExtraEnv: []string{"XCW_APP"}},
+		{Key: "query.since"},
+		{Key: "query.limit"},
+		{Key: "query.exclude"},
+		{Key: "query.where"},
+
+		// watch.*
+		{Key: "watch.simulator", ExtraEnv: []string{"XCW_SIMULATOR"}},
+		{Key: "watch.app", ExtraEnv: []string{"XCW_APP"}},
+		{Key: "watch.cooldown"},
+	}
+}
+
+func envVarForKey(key string) string {
+	// Viper: env prefix "XCW", keyDelim ".", keyReplacer "." -> "_".
+	return "XCW_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
+}
+
 // DefaultsConfig holds default values for various commands
 type DefaultsConfig struct {
 	// Tail command defaults
@@ -105,6 +180,11 @@ func Default() *Config {
 // 3. $XDG_CONFIG_HOME/xcw/config.yaml (or ~/.config/xcw/config.yaml)
 // 4. /etc/xcw/config.yaml
 func Load() (*Config, error) {
+	cfg, _, err := LoadWithMeta()
+	return cfg, err
+}
+
+func LoadWithMeta() (*Config, *LoadMeta, error) {
 	cfg := Default()
 	v := viper.New()
 
@@ -151,19 +231,67 @@ func Load() (*Config, error) {
 		v.SetConfigFile(configFile)
 
 		if err := v.ReadInConfig(); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
 	if err := v.Unmarshal(cfg); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := cfg.Validate(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return cfg, nil
+	meta := &LoadMeta{
+		ConfigFile: v.ConfigFileUsed(),
+		InConfig:   map[string]bool{},
+		EnvSet:     map[string]bool{},
+	}
+	for _, spec := range configKeySpecs() {
+		meta.InConfig[spec.Key] = v.InConfig(spec.Key)
+		// Viper's automatic env var name.
+		meta.EnvSet[envVarForKey(spec.Key)] = isEnvSet(envVarForKey(spec.Key))
+		for _, ev := range spec.ExtraEnv {
+			meta.EnvSet[ev] = isEnvSet(ev)
+		}
+	}
+
+	return cfg, meta, nil
+}
+
+func isEnvSet(name string) bool {
+	_, ok := os.LookupEnv(name)
+	return ok
+}
+
+func ComputeSources(meta *LoadMeta, flagsSet map[string]bool) map[string]string {
+	sources := map[string]string{}
+	for _, spec := range configKeySpecs() {
+		if spec.FlagName != "" && flagsSet != nil && flagsSet[spec.FlagName] {
+			sources[spec.Key] = string(SourceFlag)
+			continue
+		}
+
+		envNames := append([]string{envVarForKey(spec.Key)}, spec.ExtraEnv...)
+		envHit := false
+		for _, ev := range envNames {
+			if meta != nil && meta.EnvSet != nil && meta.EnvSet[ev] {
+				envHit = true
+				break
+			}
+		}
+		if envHit {
+			sources[spec.Key] = string(SourceEnv)
+			continue
+		}
+		if meta != nil && meta.InConfig != nil && meta.InConfig[spec.Key] {
+			sources[spec.Key] = string(SourceConfig)
+			continue
+		}
+		sources[spec.Key] = string(SourceDefault)
+	}
+	return sources
 }
 
 // findConfigFile searches for config file in standard locations

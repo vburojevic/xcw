@@ -192,7 +192,7 @@ type PatternMatch struct {
 type SummaryOutput struct {
 	Type          string             `json:"type"`
 	SchemaVersion int                `json:"schemaVersion"`
-	Timestamp     time.Time          `json:"timestamp"`
+	Timestamp     string             `json:"timestamp"`
 	Summary       *domain.LogSummary `json:"summary"`
 	Patterns      []PatternMatch     `json:"patterns,omitempty"`
 }
@@ -202,7 +202,7 @@ func NewSummaryOutput(summary *domain.LogSummary, patterns []PatternMatch) *Summ
 	return &SummaryOutput{
 		Type:          "analysis",
 		SchemaVersion: SchemaVersion,
-		Timestamp:     time.Now(),
+		Timestamp:     time.Now().UTC().Format(time.RFC3339Nano),
 		Summary:       summary,
 		Patterns:      patterns,
 	}
@@ -212,7 +212,7 @@ func NewSummaryOutput(summary *domain.LogSummary, patterns []PatternMatch) *Summ
 type EnhancedSummaryOutput struct {
 	Type              string                 `json:"type"`
 	SchemaVersion     int                    `json:"schemaVersion"`
-	Timestamp         time.Time              `json:"timestamp"`
+	Timestamp         string                 `json:"timestamp"`
 	Summary           *domain.LogSummary     `json:"summary"`
 	Patterns          []EnhancedPatternMatch `json:"patterns,omitempty"`
 	NewPatternCount   int                    `json:"new_pattern_count"`
@@ -234,7 +234,7 @@ func NewEnhancedSummaryOutput(summary *domain.LogSummary, patterns []EnhancedPat
 	return &EnhancedSummaryOutput{
 		Type:              "analysis",
 		SchemaVersion:     SchemaVersion,
-		Timestamp:         time.Now(),
+		Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
 		Summary:           summary,
 		Patterns:          patterns,
 		NewPatternCount:   newCount,

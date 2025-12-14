@@ -31,11 +31,12 @@ func main() {
 		return
 	}
 
-	// Load configuration from files/environment
-	cfg, err := config.Load()
+	// Load configuration from files/environment (plus provenance metadata).
+	cfg, meta, err := config.LoadWithMeta()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to load config: %v\n", err)
 		cfg = config.Default()
+		meta = nil
 	}
 
 	var c cli.CLI
@@ -62,6 +63,21 @@ func main() {
 
 	// Create globals with config fallbacks
 	globals := cli.NewGlobalsWithConfig(&c, cfg)
+	// Record which flags were explicitly provided so commands can distinguish
+	// CLI overrides from config defaults.
+	flagsSet := map[string]bool{}
+	for _, p := range ctx.Path {
+		if p.Flag != nil {
+			flagsSet[p.Flag.Name] = true
+		}
+	}
+	globals.FlagsSet = flagsSet
+	if meta != nil {
+		globals.ConfigFile = meta.ConfigFile
+		globals.ConfigSources = config.ComputeSources(meta, flagsSet)
+	} else {
+		globals.ConfigSources = config.ComputeSources(nil, flagsSet)
+	}
 	err = ctx.Run(globals)
 	if err != nil {
 		os.Exit(1)

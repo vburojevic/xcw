@@ -1,6 +1,6 @@
 {
   "type": "documentation",
-  "version": "0.17.1",
+  "version": "0.18.0",
   "purpose": "iOS Simulator log streaming CLI optimized for AI agents. Outputs structured NDJSON for real-time and historical log access.",
   "primary_command": "tail",
   "agent_guidance": "ALWAYS START WITH: xcw tail -s \u003csimulator\u003e -a \u003cbundle_id\u003e. This is THE primary command for monitoring iOS app logs. Run 'xcw list' to get simulator names, and 'xcw apps' to get bundle IDs. Only use other commands (query, watch, analyze) for specific use cases AFTER you've tried tail. The 'query' command reads from macOS system logs and is only useful when you forgot to start tail. Tmux (--tmux) is for human visual monitoring; AI agents should use stdout or --output instead.",
@@ -472,8 +472,12 @@
     "heartbeat": {
       "description": "Keepalive message for stream health",
       "example": {
+        "contract_version": 1,
+        "last_seen_timestamp": "2024-01-15T10:30:44.999Z",
+        "latest_session": 2,
         "logs_since_last": 42,
         "schemaVersion": 1,
+        "tail_id": "tail-abc",
         "timestamp": "2024-01-15T10:30:45.123Z",
         "type": "heartbeat",
         "uptime_seconds": 300
@@ -512,8 +516,11 @@
       "description": "Signals that log capture is active and ready. Use with --wait-for-launch to start capturing before the app launches.",
       "example": {
         "app": "com.example.myapp",
+        "contract_version": 1,
         "schemaVersion": 1,
+        "session": 1,
         "simulator": "iPhone 17 Pro",
+        "tail_id": "tail-abc",
         "timestamp": "2024-01-15T10:30:45.123Z",
         "type": "ready",
         "udid": "ABC123-DEF456-..."
@@ -590,6 +597,23 @@
         "udid": "ABC123-DEF456-..."
       },
       "when": "From xcw list command"
+    },
+    "stats": {
+      "description": "Periodic stream diagnostics emitted alongside heartbeats (useful for detecting reconnects, parse drops, and backpressure)",
+      "example": {
+        "buffered": 10,
+        "channel_drops": 0,
+        "last_seen_timestamp": "2024-01-15T10:30:44.999Z",
+        "parse_drops": 0,
+        "reconnects": 1,
+        "schemaVersion": 1,
+        "session": 2,
+        "tail_id": "tail-abc",
+        "timestamp": "2024-01-15T10:30:45.123Z",
+        "timestamp_parse_drops": 0,
+        "type": "stats"
+      },
+      "when": "Periodically alongside heartbeat output (tail only)"
     },
     "summary": {
       "description": "Log statistics summary",

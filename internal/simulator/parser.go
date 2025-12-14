@@ -3,6 +3,7 @@ package simulator
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/tidwall/gjson"
@@ -38,7 +39,7 @@ func (p *Parser) Parse(line []byte) (*domain.LogEntry, error) {
 	}
 
 	// Parse timestamp: "2025-12-08 22:11:55.808033+0100"
-	tsRaw := gjson.GetBytes(line, "timestamp").String()
+	tsRaw := strings.TrimSpace(gjson.GetBytes(line, "timestamp").String())
 	ts, err := parseTimestamp(tsRaw)
 	if err != nil {
 		if p.onTimestampError != nil {
@@ -57,6 +58,11 @@ func (p *Parser) Parse(line []byte) (*domain.LogEntry, error) {
 		processName = gjson.GetBytes(line, "process").String()
 	}
 
+	msg := gjson.GetBytes(line, "eventMessage").String()
+	if msg == "" {
+		msg = gjson.GetBytes(line, "formatString").String()
+	}
+
 	return &domain.LogEntry{
 		Timestamp:        ts,
 		Level:            domain.ParseLogLevel(gjson.GetBytes(line, "messageType").String()),
@@ -65,7 +71,7 @@ func (p *Parser) Parse(line []byte) (*domain.LogEntry, error) {
 		TID:              int(gjson.GetBytes(line, "threadID").Int()),
 		Subsystem:        gjson.GetBytes(line, "subsystem").String(),
 		Category:         gjson.GetBytes(line, "category").String(),
-		Message:          gjson.GetBytes(line, "eventMessage").String(),
+		Message:          msg,
 		ProcessPath:      processImagePath,
 		ProcessImageUUID: gjson.GetBytes(line, "processImageUUID").String(),
 		SenderPath:       gjson.GetBytes(line, "senderImagePath").String(),
@@ -77,9 +83,20 @@ func (p *Parser) Parse(line []byte) (*domain.LogEntry, error) {
 func parseTimestamp(s string) (time.Time, error) {
 	// Apple unified log format: "2006-01-02 15:04:05[.fraction]+ZZZZ"
 	// Fractional seconds may be 1-9 digits; offset is numeric without colon.
+	s = strings.TrimSpace(s)
 	layouts := []string{
 		"2006-01-02 15:04:05.999999999-0700",
 		"2006-01-02 15:04:05-0700",
+		"2006-01-02 15:04:05.999999999Z07:00",
+		"2006-01-02 15:04:05Z07:00",
+		"2006-01-02T15:04:05.999999999Z07:00",
+		"2006-01-02T15:04:05Z07:00",
+		"2006-01-02T15:04:05.999999999-0700",
+		"2006-01-02T15:04:05-0700",
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05.999999999",
+		"2006-01-02T15:04:05",
 	}
 
 	for _, layout := range layouts {

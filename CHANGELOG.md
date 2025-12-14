@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2025-12-14
+
+### Added
+- NDJSON `stats` event emitted alongside heartbeats with stream diagnostics (reconnects, parse drops, backpressure).
+- `xcw config show` now includes config provenance (config file + per-key sources: flag/env/config/default).
+- Parser fixture coverage and fuzz tests for NDJSON parsing and `--where` expressions.
+
+### Changed
+- Unified simulator selection and `--booted` semantics across commands; improved multiple-booted error guidance (`xcw pick simulator`).
+- Stream/query robustness: timeouts for `simctl` operations and queries; verbose mode surfaces `xcrun` stderr.
+- Heartbeats now always include `contract_version` for agent consumers.
+- Expanded JSON schema coverage and refreshed machine-readable help.
+
+### Fixed
+- Removed duplicate application of pattern/exclude filters across tail/query/watch pipelines.
+- Cleaned up generated sample config YAML and config path guidance.
+
 ## [0.17.1] - 2025-12-14
 
 ### Added

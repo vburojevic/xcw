@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/vburojevic/xcw/internal/config"
+	"github.com/vburojevic/xcw/internal/output"
 )
 
 // ConfigCmd shows or manages configuration
@@ -24,17 +25,41 @@ func (c *ConfigShowCmd) Run(globals *Globals) error {
 		cfg = config.Default()
 	}
 
+	sources := globals.ConfigSources
+	configFile := globals.ConfigFile
+	if sources == nil {
+		_, meta, err := config.LoadWithMeta()
+		if err == nil && meta != nil {
+			configFile = meta.ConfigFile
+			sources = config.ComputeSources(meta, globals.FlagsSet)
+		} else {
+			sources = config.ComputeSources(nil, globals.FlagsSet)
+		}
+	}
+	src := func(key string) string {
+		if sources == nil {
+			return string(config.SourceDefault)
+		}
+		if v, ok := sources[key]; ok && v != "" {
+			return v
+		}
+		return string(config.SourceDefault)
+	}
+
 	if globals.Format == "ndjson" {
 		output := map[string]interface{}{
-			"type":     "config",
-			"format":   cfg.Format,
-			"level":    cfg.Level,
-			"quiet":    cfg.Quiet,
-			"verbose":  cfg.Verbose,
-			"defaults": cfg.Defaults,
-			"tail":     cfg.Tail,
-			"query":    cfg.Query,
-			"watch":    cfg.Watch,
+			"type":          "config",
+			"schemaVersion": output.SchemaVersion,
+			"config_file":   configFile,
+			"format":        globals.Format,
+			"level":         globals.Level,
+			"quiet":         globals.Quiet,
+			"verbose":       globals.Verbose,
+			"defaults":      cfg.Defaults,
+			"tail":          cfg.Tail,
+			"query":         cfg.Query,
+			"watch":         cfg.Watch,
+			"sources":       sources,
 		}
 		encoder := json.NewEncoder(globals.Stdout)
 		return encoder.Encode(output)
@@ -47,16 +72,16 @@ func (c *ConfigShowCmd) Run(globals *Globals) error {
 	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(globals.Stdout, "  format:  %s\n", cfg.Format); err != nil {
+	if _, err := fmt.Fprintf(globals.Stdout, "  format:  %s (%s)\n", globals.Format, src("format")); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(globals.Stdout, "  level:   %s\n", cfg.Level); err != nil {
+	if _, err := fmt.Fprintf(globals.Stdout, "  level:   %s (%s)\n", globals.Level, src("level")); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(globals.Stdout, "  quiet:   %v\n", cfg.Quiet); err != nil {
+	if _, err := fmt.Fprintf(globals.Stdout, "  quiet:   %v (%s)\n", globals.Quiet, src("quiet")); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(globals.Stdout, "  verbose: %v\n", cfg.Verbose); err != nil {
+	if _, err := fmt.Fprintf(globals.Stdout, "  verbose: %v (%s)\n", globals.Verbose, src("verbose")); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
@@ -65,50 +90,74 @@ func (c *ConfigShowCmd) Run(globals *Globals) error {
 	if _, err := fmt.Fprintln(globals.Stdout, "Defaults:"); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(globals.Stdout, "  simulator:   %s\n", cfg.Defaults.Simulator); err != nil {
+	if _, err := fmt.Fprintf(globals.Stdout, "  simulator:   %s (%s)\n", cfg.Defaults.Simulator, src("defaults.simulator")); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(globals.Stdout, "  app:         %s\n", cfg.Defaults.App); err != nil {
+	if _, err := fmt.Fprintf(globals.Stdout, "  app:         %s (%s)\n", cfg.Defaults.App, src("defaults.app")); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(globals.Stdout, "  buffer_size: %d\n", cfg.Defaults.BufferSize); err != nil {
+	if _, err := fmt.Fprintf(globals.Stdout, "  buffer_size: %d (%s)\n", cfg.Defaults.BufferSize, src("defaults.buffer_size")); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(globals.Stdout, "  since:       %s\n", cfg.Defaults.Since); err != nil {
+	if _, err := fmt.Fprintf(globals.Stdout, "  since:       %s (%s)\n", cfg.Defaults.Since, src("defaults.since")); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(globals.Stdout, "  limit:       %d\n", cfg.Defaults.Limit); err != nil {
+	if _, err := fmt.Fprintf(globals.Stdout, "  limit:       %d (%s)\n", cfg.Defaults.Limit, src("defaults.limit")); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(globals.Stdout, "Tail defaults: simulator=%s heartbeat=%s summary_interval=%s session_idle=%s\n",
-		cfg.Tail.Simulator, cfg.Tail.Heartbeat, cfg.Tail.SummaryInterval, cfg.Tail.SessionIdle); err != nil {
+	if _, err := fmt.Fprintf(globals.Stdout, "\nTail defaults:\n"); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(globals.Stdout, "Query defaults: simulator=%s since=%s limit=%d\n",
-		cfg.Query.Simulator, cfg.Query.Since, cfg.Query.Limit); err != nil {
+	if _, err := fmt.Fprintf(globals.Stdout, "  simulator:        %s (%s)\n", cfg.Tail.Simulator, src("tail.simulator")); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(globals.Stdout, "Watch defaults: simulator=%s cooldown=%s\n",
-		cfg.Watch.Simulator, cfg.Watch.Cooldown); err != nil {
+	if _, err := fmt.Fprintf(globals.Stdout, "  heartbeat:        %s (%s)\n", cfg.Tail.Heartbeat, src("tail.heartbeat")); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  summary_interval: %s (%s)\n", cfg.Tail.SummaryInterval, src("tail.summary_interval")); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  session_idle:     %s (%s)\n", cfg.Tail.SessionIdle, src("tail.session_idle")); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "\nQuery defaults:\n"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  simulator: %s (%s)\n", cfg.Query.Simulator, src("query.simulator")); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  since:     %s (%s)\n", cfg.Query.Since, src("query.since")); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  limit:     %d (%s)\n", cfg.Query.Limit, src("query.limit")); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "\nWatch defaults:\n"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  simulator: %s (%s)\n", cfg.Watch.Simulator, src("watch.simulator")); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  cooldown:  %s (%s)\n", cfg.Watch.Cooldown, src("watch.cooldown")); err != nil {
 		return err
 	}
 
 	if len(cfg.Defaults.ExcludeSubsystems) > 0 {
-		if _, err := fmt.Fprintf(globals.Stdout, "  exclude_subsystems: %v\n", cfg.Defaults.ExcludeSubsystems); err != nil {
+		if _, err := fmt.Fprintf(globals.Stdout, "  exclude_subsystems: %v (%s)\n", cfg.Defaults.ExcludeSubsystems, src("defaults.exclude_subsystems")); err != nil {
 			return err
 		}
 	}
 	if cfg.Defaults.ExcludePattern != "" {
-		if _, err := fmt.Fprintf(globals.Stdout, "  exclude_pattern: %s\n", cfg.Defaults.ExcludePattern); err != nil {
+		if _, err := fmt.Fprintf(globals.Stdout, "  exclude_pattern: %s (%s)\n", cfg.Defaults.ExcludePattern, src("defaults.exclude_pattern")); err != nil {
 			return err
 		}
 	}
 
-	if path := config.ConfigFile(); path != "" {
+	if configFile != "" {
 		if _, err := fmt.Fprintln(globals.Stdout); err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintf(globals.Stdout, "Loaded from: %s\n", path); err != nil {
+		if _, err := fmt.Fprintf(globals.Stdout, "Loaded from: %s\n", configFile); err != nil {
 			return err
 		}
 	}
@@ -125,8 +174,9 @@ func (c *ConfigPathCmd) Run(globals *Globals) error {
 
 	if globals.Format == "ndjson" {
 		output := map[string]interface{}{
-			"type": "config_path",
-			"path": path,
+			"type":          "config_path",
+			"schemaVersion": output.SchemaVersion,
+			"path":          path,
 		}
 		encoder := json.NewEncoder(globals.Stdout)
 		return encoder.Encode(output)
@@ -142,13 +192,13 @@ func (c *ConfigPathCmd) Run(globals *Globals) error {
 		if _, err := fmt.Fprintln(globals.Stdout, "Create one at:"); err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintln(globals.Stdout, "  ~/.xcw.yaml"); err != nil {
+		if _, err := fmt.Fprintln(globals.Stdout, "  ./.xcw.yaml (or ./.xcw.yml)"); err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintln(globals.Stdout, "  ~/.xcwrc"); err != nil {
+		if _, err := fmt.Fprintln(globals.Stdout, "  ~/.xcw.yaml (or ~/.xcw.yml)"); err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintln(globals.Stdout, "  ./xcw.yaml"); err != nil {
+		if _, err := fmt.Fprintln(globals.Stdout, "  ~/.config/xcw/config.yaml"); err != nil {
 			return err
 		}
 	} else {
@@ -166,7 +216,11 @@ type ConfigGenerateCmd struct{}
 // Run executes the config generate command
 func (c *ConfigGenerateCmd) Run(globals *Globals) error {
 	sampleConfig := `# xcw configuration file
-# Place this file at ~/.xcw.yaml, ~/.xcwrc, or ./xcw.yaml
+# Place this file at:
+#   - ./.xcw.yaml (or ./.xcw.yml)
+#   - ~/.xcw.yaml (or ~/.xcw.yml)
+#   - ~/.config/xcw/config.yaml
+#   - /etc/xcw/config.yaml
 
 # Output format: "ndjson" (default) or "text"
 format: ndjson
@@ -232,10 +286,10 @@ query:
   # since: 5m
   # limit: 1000
 
-	watch:
-	  # simulator: booted
-	  # cooldown: 5s
-	`
+watch:
+  # simulator: booted
+  # cooldown: 5s
+`
 
 	if _, err := fmt.Fprint(globals.Stdout, sampleConfig); err != nil {
 		return err
