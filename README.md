@@ -242,9 +242,21 @@ xcrun simctl install booted MyApp.app
 xcrun simctl launch booted com.example.myapp
 ```
 
+## Backfilling gaps with --resume (NDJSON)
+
+If you see `reconnect_notice`, there may be log gaps. For NDJSON tails, you can enable best-effort backfill for small gaps:
+
+```sh
+xcw tail -s "iPhone 17 Pro" -a com.example.myapp --resume --resume-max-gap 2m --resume-limit 2000
+```
+
+- Requires `-f ndjson` (or `--machine-friendly`) and `--app`.
+- Persists resume state to `~/.xcw/resume/<bundle_id>.json` (override with `--resume-state`).
+- Emits `gap_detected` and, when backfilled, `gap_filled` (window is `(from_timestamp, to_timestamp]`).
+
 ## Querying historical logs
 
-`xcw query` reads previously recorded logs (from `--output` files or sessions) and applies the same pattern/exclude/where filters as `tail` (including min/max level overrides).  Use relative durations (`--since 5m`, `--since 1h`) and optionally request an analysis summary. Invalid filters return structured errors that are easy for AI agents to surface.
+`xcw query` queries historical logs from the iOS Simulator via macOS unified logging (best when you forgot to start `tail`). It does **not** read your recorded `--output`/session files — use `xcw analyze` / `xcw replay` for those.
 
 ```sh
 # query the last 5 minutes of logs for your app
@@ -259,6 +271,30 @@ xcw query -a com.example.myapp --since 1h -l error
 # persist detected patterns across sessions
 xcw query -a com.example.myapp --since 1h --analyze --persist-patterns
 ```
+
+## Watching logs and running triggers
+
+`xcw watch` streams logs like `tail`, and can run commands when it sees errors/faults or message patterns.
+
+```sh
+# run a command when an error-level log appears (capture command output into trigger_result)
+xcw watch -s "iPhone 17 Pro" -a com.example.myapp --where level>=error --on-error "./notify.sh" --trigger-output capture
+
+# run a command when a regex matches the message (pattern:command; can be repeated)
+xcw watch -s "iPhone 17 Pro" -a com.example.myapp --on-pattern 'crash|fatal:./notify.sh' --cooldown 10s
+```
+
+In NDJSON mode, trigger executions are correlated by `trigger_id` (and scoped by `tail_id`/`session`):
+
+- `trigger`: emitted when a trigger starts
+- `trigger_result`: emitted when it completes (`exit_code`, `duration_ms`, `timed_out`, optional `output`/`error`)
+- `trigger_error`: emitted only on failures (same `trigger_id`)
+
+Trigger output modes:
+
+- `discard` (default): do not capture stdout/stderr
+- `capture`: capture combined stdout/stderr into `trigger_result.output` (truncated)
+- `inherit`: stream trigger output to stdout/stderr (can break NDJSON if stdout is used)
 
 ## Capturing print() statements
 
