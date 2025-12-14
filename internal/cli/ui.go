@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/signal"
 	"regexp"
 	"syscall"
@@ -31,16 +30,8 @@ type UICmd struct {
 
 // Run executes the UI command
 func (c *UICmd) Run(globals *Globals) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Handle signals for graceful shutdown
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		cancel()
-	}()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	// Validate mutual exclusivity of flags
 	if c.Simulator != "" && c.Booted {

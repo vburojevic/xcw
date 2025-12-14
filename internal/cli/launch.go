@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"os/signal"
 	"syscall"
@@ -14,6 +13,7 @@ import (
 	"github.com/vburojevic/xcw/internal/domain"
 	"github.com/vburojevic/xcw/internal/output"
 	"github.com/vburojevic/xcw/internal/simulator"
+	"golang.org/x/sync/errgroup"
 )
 
 // LaunchCmd launches an app and captures stdout/stderr (including print statements)
@@ -38,16 +38,9 @@ type ConsoleOutput struct {
 
 // Run executes the launch command
 func (c *LaunchCmd) Run(globals *Globals) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Handle signals for graceful shutdown
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		cancel()
-	}()
+	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	group, ctx := errgroup.WithContext(signalCtx)
 
 	// Validate mutual exclusivity of flags
 	if c.Simulator != "" && c.Booted {
@@ -111,31 +104,38 @@ func (c *LaunchCmd) Run(globals *Globals) error {
 		return c.outputError(globals, "LAUNCH_FAILED", fmt.Sprintf("failed to launch app: %v", err))
 	}
 
-	// Read stdout in a goroutine
-	go func() {
+	// Read stdout in background
+	group.Go(func() error {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			c.outputConsoleLine(globals, "stdout", scanner.Text(), c.App)
 		}
-	}()
+		return scanner.Err()
+	})
 
-	// Read stderr in a goroutine
-	go func() {
+	// Read stderr in background
+	group.Go(func() error {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
 			c.outputConsoleLine(globals, "stderr", scanner.Text(), c.App)
 		}
-	}()
+		return scanner.Err()
+	})
 
-	// Wait for the command to finish
-	err = cmd.Wait()
-	if ctx.Err() != nil {
+	// Wait for the command to finish and drain output.
+	waitErr := cmd.Wait()
+	scanErr := group.Wait()
+
+	if signalCtx.Err() != nil {
 		// Context was cancelled (signal received)
 		return nil
 	}
-	if err != nil {
+	if waitErr != nil {
 		// App exited with error
-		globals.Debug("App exited with error: %v", err)
+		globals.Debug("App exited with error: %v", waitErr)
+	}
+	if scanErr != nil {
+		globals.Debug("launch output reader error: %v", scanErr)
 	}
 
 	return nil

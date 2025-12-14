@@ -21,6 +21,7 @@ import (
 	"github.com/vburojevic/xcw/internal/output"
 	"github.com/vburojevic/xcw/internal/simulator"
 	"github.com/vburojevic/xcw/internal/tmux"
+	"golang.org/x/sync/errgroup"
 )
 
 // WatchCmd watches logs and triggers commands on specific patterns
@@ -77,18 +78,14 @@ func maybeNoStyleWatch(globals *Globals) {
 
 // Run executes the watch command
 func (c *WatchCmd) Run(globals *Globals) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	maybeNoStyleWatch(globals)
 	applyWatchDefaults(globals.Config, c)
 	clk := clock.New()
-
-	// Handle signals for graceful shutdown
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		cancel()
+	triggerGroup, triggerCtx := errgroup.WithContext(ctx)
+	defer func() {
+		stop()
+		_ = triggerGroup.Wait()
 	}()
 
 	// Parse cooldown duration
@@ -361,7 +358,7 @@ func (c *WatchCmd) Run(globals *Globals) error {
 			// Check error trigger
 			if c.OnError != "" && entry.Level == domain.LogLevelError {
 				if now.Sub(lastErrorTrigger) >= cooldown {
-					c.runTrigger(globals, "error", c.OnError, &entry, triggerTimeout, triggerSem, c.TriggerOutput)
+					c.runTrigger(triggerCtx, triggerGroup, globals, "error", c.OnError, entry, triggerTimeout, triggerSem, c.TriggerOutput)
 					lastErrorTrigger = now
 				}
 			}
@@ -369,7 +366,7 @@ func (c *WatchCmd) Run(globals *Globals) error {
 			// Check fault trigger
 			if c.OnFault != "" && entry.Level == domain.LogLevelFault {
 				if now.Sub(lastFaultTrigger) >= cooldown {
-					c.runTrigger(globals, "fault", c.OnFault, &entry, triggerTimeout, triggerSem, c.TriggerOutput)
+					c.runTrigger(triggerCtx, triggerGroup, globals, "fault", c.OnFault, entry, triggerTimeout, triggerSem, c.TriggerOutput)
 					lastFaultTrigger = now
 				}
 			}
@@ -378,7 +375,7 @@ func (c *WatchCmd) Run(globals *Globals) error {
 			for i, t := range triggers {
 				if t.pattern.MatchString(entry.Message) {
 					if now.Sub(lastPatternTriggers[i]) >= cooldown {
-						c.runTrigger(globals, "pattern:"+t.pattern.String(), t.command, &entry, triggerTimeout, triggerSem, c.TriggerOutput)
+						c.runTrigger(triggerCtx, triggerGroup, globals, "pattern:"+t.pattern.String(), t.command, entry, triggerTimeout, triggerSem, c.TriggerOutput)
 						lastPatternTriggers[i] = now
 					}
 				}
@@ -392,7 +389,7 @@ func (c *WatchCmd) Run(globals *Globals) error {
 }
 
 // runTrigger executes a trigger command with safety limits
-func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, entry *domain.LogEntry, timeout time.Duration, sem chan struct{}, outputMode string) {
+func (c *WatchCmd) runTrigger(ctx context.Context, group *errgroup.Group, globals *Globals, triggerType, command string, entry domain.LogEntry, timeout time.Duration, sem chan struct{}, outputMode string) {
 	// Try to acquire semaphore (non-blocking)
 	select {
 	case sem <- struct{}{}:
@@ -423,11 +420,11 @@ func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, ent
 	}
 
 	// Run command in background (don't block log processing)
-	go func() {
+	group.Go(func() error {
 		defer func() { <-sem }() // Release semaphore when done
 
-		// Create context with timeout
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		// Create context with timeout (and cancel on parent ctx)
+		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
 		// Build command (shell or direct exec)
@@ -444,7 +441,7 @@ func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, ent
 						globals.Debug("failed to write trigger error: %v", err)
 					}
 				}
-				return
+				return nil
 			}
 			cmd = exec.CommandContext(ctx, argv[0], argv[1:]...)
 		} else {
@@ -497,7 +494,7 @@ func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, ent
 					}
 				}
 			}
-			return
+			return nil
 		default: // "discard"
 			cmd.Stdout = nil
 			cmd.Stderr = nil
@@ -518,7 +515,8 @@ func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, ent
 				}
 			}
 		}
-	}()
+		return nil
+	})
 }
 
 func (c *WatchCmd) outputError(globals *Globals, code, message string, hint ...string) error {

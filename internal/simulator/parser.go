@@ -1,11 +1,11 @@
 package simulator
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"time"
 
+	"github.com/tidwall/gjson"
 	"github.com/vburojevic/xcw/internal/domain"
 )
 
@@ -27,41 +27,49 @@ func (p *Parser) SetTimestampErrorHandler(fn func(raw string, err error)) {
 
 // Parse converts a raw NDJSON line to a LogEntry
 func (p *Parser) Parse(line []byte) (*domain.LogEntry, error) {
-	var raw domain.RawLogEntry
-	if err := json.Unmarshal(line, &raw); err != nil {
-		return nil, err
+	if !gjson.ValidBytes(line) {
+		return nil, fmt.Errorf("invalid json")
 	}
 
 	// Skip non-log events
-	if raw.EventType != "logEvent" && raw.EventType != "" {
+	eventType := gjson.GetBytes(line, "eventType").String()
+	if eventType != "logEvent" && eventType != "" {
 		return nil, nil
 	}
 
 	// Parse timestamp: "2025-12-08 22:11:55.808033+0100"
-	ts, err := parseTimestamp(raw.Timestamp)
+	tsRaw := gjson.GetBytes(line, "timestamp").String()
+	ts, err := parseTimestamp(tsRaw)
 	if err != nil {
 		if p.onTimestampError != nil {
-			p.onTimestampError(raw.Timestamp, err)
+			p.onTimestampError(tsRaw, err)
 		}
 		ts = time.Now() // Fallback to current time
 	}
 
 	// Extract process name from path
-	processName := filepath.Base(raw.ProcessImagePath)
+	processImagePath := gjson.GetBytes(line, "processImagePath").String()
+	processName := ""
+	if processImagePath != "" {
+		processName = filepath.Base(processImagePath)
+	} else {
+		// Some log lines may omit processImagePath; best-effort fallback.
+		processName = gjson.GetBytes(line, "process").String()
+	}
 
 	return &domain.LogEntry{
 		Timestamp:        ts,
-		Level:            domain.ParseLogLevel(raw.MessageType),
+		Level:            domain.ParseLogLevel(gjson.GetBytes(line, "messageType").String()),
 		Process:          processName,
-		PID:              raw.ProcessID,
-		TID:              raw.ThreadID,
-		Subsystem:        raw.Subsystem,
-		Category:         raw.Category,
-		Message:          raw.EventMessage,
-		ProcessPath:      raw.ProcessImagePath,
-		ProcessImageUUID: raw.ProcessImageUUID,
-		SenderPath:       raw.SenderImagePath,
-		EventType:        raw.EventType,
+		PID:              int(gjson.GetBytes(line, "processID").Int()),
+		TID:              int(gjson.GetBytes(line, "threadID").Int()),
+		Subsystem:        gjson.GetBytes(line, "subsystem").String(),
+		Category:         gjson.GetBytes(line, "category").String(),
+		Message:          gjson.GetBytes(line, "eventMessage").String(),
+		ProcessPath:      processImagePath,
+		ProcessImageUUID: gjson.GetBytes(line, "processImageUUID").String(),
+		SenderPath:       gjson.GetBytes(line, "senderImagePath").String(),
+		EventType:        eventType,
 	}, nil
 }
 

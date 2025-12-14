@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.1] - 2025-12-14
+
+### Added
+- Goleak-based goroutine leak checks in the test suite.
+
+### Changed
+- Faster simulator NDJSON parsing via `gjson` field extraction (reduced allocations vs full unmarshal).
+- Commands now use `signal.NotifyContext` for shutdown handling; `watch` trigger processes are cancelled and awaited on exit.
+
 ## [0.17.0] - 2025-12-14
 
 ### Added

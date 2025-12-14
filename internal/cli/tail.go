@@ -50,21 +50,13 @@ func (c *TailCmd) Run(globals *Globals) error {
 	// Disable styles when stdout is not a TTY
 	maybeNoStyle(globals)
 	applyTailDefaults(globals.Config, c)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	// Unique ID for this tail invocation (carried on all events)
 	tailID := generateTailID()
 	var log *agentLogger
 	clk := clock.New()
-
-	// Handle signals for graceful shutdown
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		cancel()
-	}()
 
 	// Validate mutual exclusivity of flags
 	if c.Simulator != "" && c.Booted {
