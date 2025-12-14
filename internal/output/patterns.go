@@ -46,7 +46,9 @@ func NewPatternStore(path string) *PatternStore {
 	}
 
 	// Load existing patterns (ignore errors, start fresh if file doesn't exist)
-	store.Load()
+	if err := store.Load(); err != nil {
+		store.patterns = make(map[string]*StoredPattern)
+	}
 
 	return store
 }

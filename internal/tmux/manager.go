@@ -29,9 +29,9 @@ type Manager struct {
 
 // Errors
 var (
-	ErrTmuxNotInstalled  = fmt.Errorf("tmux is not installed")
+	ErrTmuxNotInstalled   = fmt.Errorf("tmux is not installed")
 	ErrNoSessionAvailable = fmt.Errorf("no tmux session available")
-	ErrNoPaneAvailable   = fmt.Errorf("no tmux pane available")
+	ErrNoPaneAvailable    = fmt.Errorf("no tmux pane available")
 )
 
 // IsTmuxAvailable checks if tmux is installed

@@ -113,7 +113,9 @@ func (c *AppsCmd) Run(globals *Globals) error {
 			if app.Path != "" {
 				entry["path"] = app.Path
 			}
-			encoder.Encode(entry)
+			if err := encoder.Encode(entry); err != nil {
+				return err
+			}
 		}
 
 		// Summary
@@ -124,19 +126,27 @@ func (c *AppsCmd) Run(globals *Globals) error {
 			"udid":          device.UDID,
 			"total":         len(apps),
 		}
-		encoder.Encode(summary)
+		if err := encoder.Encode(summary); err != nil {
+			return err
+		}
 	} else {
 		// Text output
 		if !globals.Quiet {
-			fmt.Fprintf(globals.Stdout, "Installed apps on %s (%s)\n\n", device.Name, device.UDID)
+			if _, err := fmt.Fprintf(globals.Stdout, "Installed apps on %s (%s)\n\n", device.Name, device.UDID); err != nil {
+				return err
+			}
 		}
 
 		for _, app := range apps {
-			fmt.Fprintf(globals.Stdout, "%-50s %s (%s)\n", app.BundleID, app.Name, app.Version)
+			if _, err := fmt.Fprintf(globals.Stdout, "%-50s %s (%s)\n", app.BundleID, app.Name, app.Version); err != nil {
+				return err
+			}
 		}
 
 		if !globals.Quiet {
-			fmt.Fprintf(globals.Stdout, "\nTotal: %d apps\n", len(apps))
+			if _, err := fmt.Fprintf(globals.Stdout, "\nTotal: %d apps\n", len(apps)); err != nil {
+				return err
+			}
 		}
 	}
 

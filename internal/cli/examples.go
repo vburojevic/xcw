@@ -291,7 +291,9 @@ func (c *ExamplesCmd) outputJSON(globals *Globals) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(globals.Stdout, string(data))
+	if _, err := fmt.Fprintln(globals.Stdout, string(data)); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -331,7 +333,9 @@ func (c *ExamplesCmd) outputText(globals *Globals) error {
 		}
 	}
 
-	fmt.Fprint(globals.Stdout, sb.String())
+	if _, err := fmt.Fprint(globals.Stdout, sb.String()); err != nil {
+		return err
+	}
 	return nil
 }
 

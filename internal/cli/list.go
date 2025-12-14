@@ -61,18 +61,22 @@ func (c *ListCmd) outputNDJSON(globals *Globals, devices []domain.Device) error 
 
 func (c *ListCmd) outputText(globals *Globals, devices []domain.Device) error {
 	if len(devices) == 0 {
-		fmt.Fprintln(globals.Stdout, output.Styles.Warning.Render("No simulators found"))
+		if _, err := fmt.Fprintln(globals.Stdout, output.Styles.Warning.Render("No simulators found")); err != nil {
+			return err
+		}
 		return nil
 	}
 
 	// Create table with options for clean output
 	table := tablewriter.NewTable(globals.Stdout,
 		tablewriter.WithHeader([]string{"NAME", "STATE", "RUNTIME", "UDID"}),
-		tablewriter.WithBorders(tw.Border{
-			Left:   tw.Off,
-			Right:  tw.Off,
-			Top:    tw.Off,
-			Bottom: tw.Off,
+		tablewriter.WithRendition(tw.Rendition{
+			Borders: tw.Border{
+				Left:   tw.Off,
+				Right:  tw.Off,
+				Top:    tw.Off,
+				Bottom: tw.Off,
+			},
 		}),
 		tablewriter.WithHeaderAlignment(tw.AlignLeft),
 	)
@@ -87,12 +91,14 @@ func (c *ListCmd) outputText(globals *Globals, devices []domain.Device) error {
 			stateStr = "○ " + stateStr
 		}
 
-		table.Append([]string{
+		if err := table.Append([]string{
 			truncate(d.Name, 35),
 			stateStr,
 			d.RuntimeIdentifier,
 			d.UDID,
-		})
+		}); err != nil {
+			return err
+		}
 	}
 
 	if err := table.Render(); err != nil {
@@ -100,11 +106,13 @@ func (c *ListCmd) outputText(globals *Globals, devices []domain.Device) error {
 	}
 
 	// Print summary with styling
-	fmt.Fprintf(globals.Stdout, "\n%s %s, %s\n",
+	if _, err := fmt.Fprintf(globals.Stdout, "\n%s %s, %s\n",
 		output.Styles.Label.Render("Total:"),
 		output.Styles.Value.Render(fmt.Sprintf("%d simulator(s)", len(devices))),
 		output.Styles.Success.Render(fmt.Sprintf("%d booted", bootedCount)),
-	)
+	); err != nil {
+		return err
+	}
 
 	return nil
 }

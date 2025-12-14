@@ -33,9 +33,12 @@ func TestLoad(t *testing.T) {
 	t.Run("returns defaults when no config file exists", func(t *testing.T) {
 		// Create temp dir with no config
 		tmpDir := t.TempDir()
-		origDir, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(origDir)
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() {
+			require.NoError(t, os.Chdir(origDir))
+		})
 
 		cfg, err := Load()
 		require.NoError(t, err)
@@ -179,17 +182,9 @@ watch:
 }
 
 func TestConfigEnvironmentVariables(t *testing.T) {
-	// Save original env
-	origFormat := os.Getenv("XCW_FORMAT")
-	origApp := os.Getenv("XCW_APP")
-	defer func() {
-		os.Setenv("XCW_FORMAT", origFormat)
-		os.Setenv("XCW_APP", origApp)
-	}()
-
 	// Set env variables
-	os.Setenv("XCW_FORMAT", "text")
-	os.Setenv("XCW_APP", "com.env.app")
+	t.Setenv("XCW_FORMAT", "text")
+	t.Setenv("XCW_APP", "com.env.app")
 
 	// Load config (should pick up env vars)
 	cfg, err := Load()
@@ -224,63 +219,81 @@ func TestDefaultsConfig(t *testing.T) {
 func TestFindConfigFile(t *testing.T) {
 	t.Run("finds .xcw.yaml in current directory", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		origDir, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(origDir)
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() {
+			require.NoError(t, os.Chdir(origDir))
+		})
 
 		// Create config file
 		configPath := filepath.Join(tmpDir, ".xcw.yaml")
-		err := os.WriteFile(configPath, []byte("format: text"), 0644)
+		err = os.WriteFile(configPath, []byte("format: text"), 0644)
 		require.NoError(t, err)
 
 		found := findConfigFile()
 		// Resolve symlinks for comparison (macOS /var -> /private/var)
-		expectedPath, _ := filepath.EvalSymlinks(configPath)
-		foundPath, _ := filepath.EvalSymlinks(found)
+		expectedPath, err := filepath.EvalSymlinks(configPath)
+		require.NoError(t, err)
+		foundPath, err := filepath.EvalSymlinks(found)
+		require.NoError(t, err)
 		assert.Equal(t, expectedPath, foundPath)
 	})
 
 	t.Run("finds .xcw.yml in current directory", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		origDir, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(origDir)
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() {
+			require.NoError(t, os.Chdir(origDir))
+		})
 
 		configPath := filepath.Join(tmpDir, ".xcw.yml")
-		err := os.WriteFile(configPath, []byte("format: text"), 0644)
+		err = os.WriteFile(configPath, []byte("format: text"), 0644)
 		require.NoError(t, err)
 
 		found := findConfigFile()
-		expectedPath, _ := filepath.EvalSymlinks(configPath)
-		foundPath, _ := filepath.EvalSymlinks(found)
+		expectedPath, err := filepath.EvalSymlinks(configPath)
+		require.NoError(t, err)
+		foundPath, err := filepath.EvalSymlinks(found)
+		require.NoError(t, err)
 		assert.Equal(t, expectedPath, foundPath)
 	})
 
 	t.Run("prefers .xcw.yaml over .xcw.yml", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		origDir, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(origDir)
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() {
+			require.NoError(t, os.Chdir(origDir))
+		})
 
 		// Create both files
 		yamlPath := filepath.Join(tmpDir, ".xcw.yaml")
 		ymlPath := filepath.Join(tmpDir, ".xcw.yml")
-		err := os.WriteFile(yamlPath, []byte("format: yaml"), 0644)
+		err = os.WriteFile(yamlPath, []byte("format: yaml"), 0644)
 		require.NoError(t, err)
 		err = os.WriteFile(ymlPath, []byte("format: yml"), 0644)
 		require.NoError(t, err)
 
 		found := findConfigFile()
-		expectedPath, _ := filepath.EvalSymlinks(yamlPath)
-		foundPath, _ := filepath.EvalSymlinks(found)
+		expectedPath, err := filepath.EvalSymlinks(yamlPath)
+		require.NoError(t, err)
+		foundPath, err := filepath.EvalSymlinks(found)
+		require.NoError(t, err)
 		assert.Equal(t, expectedPath, foundPath)
 	})
 
 	t.Run("returns empty string when no config found", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		origDir, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(origDir)
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() {
+			require.NoError(t, os.Chdir(origDir))
+		})
 
 		found := findConfigFile()
 		assert.Empty(t, found)

@@ -92,9 +92,15 @@ func (c *DoctorCmd) Run(globals *Globals) error {
 	}
 
 	// Text output
-	fmt.Fprintln(globals.Stdout, "xcw Doctor")
-	fmt.Fprintln(globals.Stdout, "==========")
-	fmt.Fprintln(globals.Stdout)
+	if _, err := fmt.Fprintln(globals.Stdout, "xcw Doctor"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout, "=========="); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+		return err
+	}
 
 	for _, check := range checks {
 		var icon string
@@ -107,20 +113,32 @@ func (c *DoctorCmd) Run(globals *Globals) error {
 			icon = "✗"
 		}
 
-		fmt.Fprintf(globals.Stdout, "%s %s\n", icon, check.Name)
+		if _, err := fmt.Fprintf(globals.Stdout, "%s %s\n", icon, check.Name); err != nil {
+			return err
+		}
 		if check.Message != "" {
-			fmt.Fprintf(globals.Stdout, "  %s\n", check.Message)
+			if _, err := fmt.Fprintf(globals.Stdout, "  %s\n", check.Message); err != nil {
+				return err
+			}
 		}
 		if check.Details != "" {
-			fmt.Fprintf(globals.Stdout, "  %s\n", check.Details)
+			if _, err := fmt.Fprintf(globals.Stdout, "  %s\n", check.Details); err != nil {
+				return err
+			}
 		}
 	}
 
-	fmt.Fprintln(globals.Stdout)
+	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+		return err
+	}
 	if errorCount == 0 && warnCount == 0 {
-		fmt.Fprintln(globals.Stdout, "All checks passed!")
+		if _, err := fmt.Fprintln(globals.Stdout, "All checks passed!"); err != nil {
+			return err
+		}
 	} else {
-		fmt.Fprintf(globals.Stdout, "Errors: %d, Warnings: %d\n", errorCount, warnCount)
+		if _, err := fmt.Fprintf(globals.Stdout, "Errors: %d, Warnings: %d\n", errorCount, warnCount); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -328,7 +346,14 @@ func (c *DoctorCmd) checkWritePermission(path string) bool {
 	if err != nil {
 		return false
 	}
-	f.Close()
-	os.Remove(testFile)
+	if err := f.Close(); err != nil {
+		if err := os.Remove(testFile); err != nil {
+			return false
+		}
+		return false
+	}
+	if err := os.Remove(testFile); err != nil {
+		return false
+	}
 	return true
 }

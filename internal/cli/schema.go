@@ -2,7 +2,6 @@ package cli
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/vburojevic/xcw/internal/output"
@@ -667,26 +666,4 @@ func sessionDebugSchema() map[string]interface{} {
 		},
 		"required": []string{"type", "schemaVersion", "session", "pid", "reason"},
 	}
-}
-
-// Helper to output a quick reference
-func (c *SchemaCmd) outputTextHelp(globals *Globals) {
-	fmt.Fprintln(globals.Stdout, "XcodeConsoleWatcher Output Types:")
-	fmt.Fprintln(globals.Stdout, "")
-	fmt.Fprintln(globals.Stdout, "  log       - Log entry from simulator")
-	fmt.Fprintln(globals.Stdout, "  summary   - Periodic log statistics")
-	fmt.Fprintln(globals.Stdout, "  heartbeat - Keepalive message")
-	fmt.Fprintln(globals.Stdout, "  error     - Error from xcw")
-	fmt.Fprintln(globals.Stdout, "  tmux      - Tmux session info")
-	fmt.Fprintln(globals.Stdout, "  info      - Informational message")
-	fmt.Fprintln(globals.Stdout, "  warning   - Warning message")
-	fmt.Fprintln(globals.Stdout, "  trigger   - Trigger event notification")
-	fmt.Fprintln(globals.Stdout, "  doctor    - System diagnostic report")
-	fmt.Fprintln(globals.Stdout, "  app       - Installed app info")
-	fmt.Fprintln(globals.Stdout, "  pick      - Interactive selection result")
-	fmt.Fprintln(globals.Stdout, "  update    - Upgrade instructions")
-	fmt.Fprintln(globals.Stdout, "  session   - Session file info")
-	fmt.Fprintln(globals.Stdout, "  session_debug - Verbose session transition info (verbose mode)")
-	fmt.Fprintln(globals.Stdout, "")
-	fmt.Fprintln(globals.Stdout, "Use --type to filter: xcw schema --type log,error")
 }

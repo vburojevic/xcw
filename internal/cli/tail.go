@@ -35,7 +35,8 @@ type TailCmd struct {
 
 	Simulator   string   `short:"s" help:"Simulator name or UDID"`
 	Booted      bool     `short:"b" help:"Use booted simulator (error if multiple)"`
-	App         string   `short:"a" required:"" help:"App bundle identifier to filter logs"`
+	App         string   `short:"a" help:"App bundle identifier to filter logs (required unless --predicate or --all)"`
+	All         bool     `help:"Allow streaming without --app/--predicate (can be very noisy)"`
 	Subsystem   []string `help:"Filter by subsystem (can be repeated)"`
 	Category    []string `help:"Filter by category (can be repeated)"`
 	Predicate   string   `help:"Raw NSPredicate filter (overrides --app, --subsystem, --category)"`
@@ -72,8 +73,8 @@ func (c *TailCmd) Run(globals *Globals) error {
 	if err := validateFlags(globals, c.DryRunJSON, c.Tmux); err != nil {
 		return err
 	}
-	if globals.Format == "text" && globals.Config != nil && globals.Config.Quiet && !c.NoAgentHints && globals.Config.Format == "ndjson" {
-		// no-op, just clarity
+	if err := validateAppPredicateAll(c.App, c.Predicate, c.All, len(c.Subsystem) > 0 || len(c.Category) > 0); err != nil {
+		return outputErrorCommon(globals, err.Code, err.Message, err.Hint)
 	}
 
 	// Find the simulator
@@ -89,17 +90,19 @@ func (c *TailCmd) Run(globals *Globals) error {
 		device, err = mgr.FindBootedDevice(ctx)
 	}
 	if err != nil {
-		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error())
+		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error(), hintForStreamOrQuery(err))
 	}
 	globals.Debug("Found device: %s (UDID: %s, State: %s)", device.Name, device.UDID, device.State)
 
 	// Fetch app version/build for metadata (best-effort)
 	appVersion, appBuild := "", ""
-	if v, b, err := mgr.GetAppInfo(ctx, device.UDID, c.App); err == nil {
-		appVersion, appBuild = v, b
-		globals.Debug("App info: version=%s build=%s", appVersion, appBuild)
-	} else {
-		globals.Debug("App info unavailable: %v", err)
+	if c.App != "" {
+		if v, b, err := mgr.GetAppInfo(ctx, device.UDID, c.App); err == nil {
+			appVersion, appBuild = v, b
+			globals.Debug("App info: version=%s build=%s", appVersion, appBuild)
+		} else {
+			globals.Debug("App info unavailable: %v", err)
+		}
 	}
 
 	// Determine output destination
@@ -142,17 +145,23 @@ func (c *TailCmd) Run(globals *Globals) error {
 		if bw != nil {
 			outputWriter = bw
 		}
-			if !globals.Quiet && path != "" {
-				if globals.Format == "ndjson" {
-					w := output.NewNDJSONWriter(globals.Stdout)
-					w.WriteInfo(
-						fmt.Sprintf("Writing logs to %s", path),
-						device.Name, device.UDID, "", "")
-					_ = w.WriteRotation(path, tailID, sessionNum)
-				} else {
-					fmt.Fprintf(globals.Stderr, "Writing logs to %s\n", path)
+		if !globals.Quiet && path != "" {
+			if globals.Format == "ndjson" {
+				w := output.NewNDJSONWriter(globals.Stdout)
+				if err := w.WriteInfo(
+					fmt.Sprintf("Writing logs to %s", path),
+					device.Name, device.UDID, "", ""); err != nil {
+					return err
+				}
+				if err := w.WriteRotation(path, tailID, sessionNum); err != nil {
+					return err
+				}
+			} else {
+				if _, err := fmt.Fprintf(globals.Stderr, "Writing logs to %s\n", path); err != nil {
+					globals.Debug("failed to write output path: %v", err)
 				}
 			}
+		}
 		return nil
 	}
 
@@ -162,7 +171,9 @@ func (c *TailCmd) Run(globals *Globals) error {
 		}
 		if pathBuilder != nil {
 			defer func() {
-				rotator.Close()
+				if err := rotator.Close(); err != nil {
+					globals.Debug("failed to close output file: %v", err)
+				}
 			}()
 		}
 	} else {
@@ -179,34 +190,42 @@ func (c *TailCmd) Run(globals *Globals) error {
 		}
 		globals.Debug("Tmux session name: %s", sessionName)
 
-			if !tmux.IsTmuxAvailable() {
-				emitWarning(globals, output.NewEmitter(globals.Stdout), "tmux not installed, falling back to stdout")
-			} else {
+		if !tmux.IsTmuxAvailable() {
+			emitWarning(globals, output.NewEmitter(globals.Stdout), "tmux not installed, falling back to stdout")
+		} else {
 			cfg := &tmux.Config{
 				SessionName:   sessionName,
 				SimulatorName: device.Name,
 				Detached:      true,
 			}
 
-				tmuxMgr, err = tmux.NewManager(cfg)
-				if err != nil {
-					emitWarning(globals, output.NewEmitter(globals.Stdout), fmt.Sprintf("failed to create tmux session: %v, falling back to stdout", err))
+			tmuxMgr, err = tmux.NewManager(cfg)
+			if err != nil {
+				emitWarning(globals, output.NewEmitter(globals.Stdout), fmt.Sprintf("failed to create tmux session: %v, falling back to stdout", err))
+			} else {
+				if err := tmuxMgr.GetOrCreateSession(); err != nil {
+					emitWarning(globals, output.NewEmitter(globals.Stdout), fmt.Sprintf("failed to setup tmux session: %v, falling back to stdout", err))
 				} else {
-					if err := tmuxMgr.GetOrCreateSession(); err != nil {
-						emitWarning(globals, output.NewEmitter(globals.Stdout), fmt.Sprintf("failed to setup tmux session: %v, falling back to stdout", err))
-					} else {
 					// Successfully created tmux session
 					outputWriter = tmux.NewWriter(tmuxMgr)
 
 					// Clear pane and show banner
-					tmuxMgr.ClearPaneWithBanner(fmt.Sprintf("Watching: %s (%s)", device.Name, c.App))
+					if err := tmuxMgr.ClearPaneWithBanner(fmt.Sprintf("Watching: %s (%s)", device.Name, c.App)); err != nil {
+						emitWarning(globals, output.NewEmitter(globals.Stdout), fmt.Sprintf("failed to clear tmux pane: %v", err))
+					}
 
 					// Output attach command
 					if globals.Format == "ndjson" {
-						output.NewNDJSONWriter(globals.Stdout).WriteTmux(sessionName, tmuxMgr.AttachCommand())
+						if err := output.NewNDJSONWriter(globals.Stdout).WriteTmux(sessionName, tmuxMgr.AttachCommand()); err != nil {
+							return err
+						}
 					} else {
-						fmt.Fprintf(globals.Stdout, "Tmux session: %s\n", sessionName)
-						fmt.Fprintf(globals.Stdout, "Attach with: %s\n", tmuxMgr.AttachCommand())
+						if _, err := fmt.Fprintf(globals.Stdout, "Tmux session: %s\n", sessionName); err != nil {
+							return err
+						}
+						if _, err := fmt.Fprintf(globals.Stdout, "Attach with: %s\n", tmuxMgr.AttachCommand()); err != nil {
+							return err
+						}
 					}
 				}
 			}
@@ -221,22 +240,32 @@ func (c *TailCmd) Run(globals *Globals) error {
 	// Output device info if not quiet and not in tmux mode (tmux already shows banner)
 	if !globals.Quiet && tmuxMgr == nil {
 		if globals.Format == "ndjson" {
-			output.NewNDJSONWriter(globals.Stdout).WriteInfo(
+			if err := output.NewNDJSONWriter(globals.Stdout).WriteInfo(
 				fmt.Sprintf("Streaming logs from %s (%s)", device.Name, device.UDID),
-				device.Name, device.UDID, "", "")
-		} else {
-			fmt.Fprintf(globals.Stderr, "Streaming logs from %s (%s)\n", device.Name, device.UDID)
-			fmt.Fprintf(globals.Stderr, "Filtering by app: %s\n", c.App)
-			if c.Pattern != "" {
-				fmt.Fprintf(globals.Stderr, "Pattern filter: %s\n", c.Pattern)
+				device.Name, device.UDID, "", ""); err != nil {
+				return err
 			}
-			fmt.Fprintln(globals.Stderr, "Press Ctrl+C to stop")
+		} else {
+			if _, err := fmt.Fprintf(globals.Stderr, "Streaming logs from %s (%s)\n", device.Name, device.UDID); err != nil {
+				globals.Debug("failed to write stream info: %v", err)
+			}
+			if _, err := fmt.Fprintf(globals.Stderr, "Filtering by app: %s\n", c.App); err != nil {
+				globals.Debug("failed to write stream info: %v", err)
+			}
+			if c.Pattern != "" {
+				if _, err := fmt.Fprintf(globals.Stderr, "Pattern filter: %s\n", c.Pattern); err != nil {
+					globals.Debug("failed to write stream info: %v", err)
+				}
+			}
+			if _, err := fmt.Fprintln(globals.Stderr, "Press Ctrl+C to stop"); err != nil {
+				globals.Debug("failed to write stream info: %v", err)
+			}
 		}
 	}
 
 	pattern, excludePatterns, whereFilter, err := buildFilters(c.Pattern, c.Exclude, c.Where)
 	if err != nil {
-		return c.outputError(globals, "INVALID_FILTER", err.Error())
+		return c.outputError(globals, "INVALID_FILTER", err.Error(), hintForFilter(err))
 	}
 	pipeline := filter.NewPipeline(pattern, excludePatterns, whereFilter)
 
@@ -245,20 +274,20 @@ func (c *TailCmd) Run(globals *Globals) error {
 
 	// Create streamer
 	streamer := simulator.NewStreamer(mgr)
-		opts := simulator.StreamOptions{
-			BundleID:          c.App,
-			Subsystems:        c.Subsystem,
-			Categories:        c.Category,
-			Processes:         c.Process,
-			MinLevel:          minLevel,
-			MaxLevel:          maxLevel,
-			Pattern:           pattern,
-			ExcludePatterns:   excludePatterns,
-			ExcludeSubsystems: c.ExcludeSubsystem,
-			BufferSize:        c.BufferSize,
-			RawPredicate:      c.Predicate,
-			Verbose:           globals.Verbose,
-		}
+	opts := simulator.StreamOptions{
+		BundleID:          c.App,
+		Subsystems:        c.Subsystem,
+		Categories:        c.Category,
+		Processes:         c.Process,
+		MinLevel:          minLevel,
+		MaxLevel:          maxLevel,
+		Pattern:           pattern,
+		ExcludePatterns:   excludePatterns,
+		ExcludeSubsystems: c.ExcludeSubsystem,
+		BufferSize:        c.BufferSize,
+		RawPredicate:      c.Predicate,
+		Verbose:           globals.Verbose,
+	}
 
 	if c.DryRunJSON {
 		enc := json.NewEncoder(globals.Stdout)
@@ -279,9 +308,13 @@ func (c *TailCmd) Run(globals *Globals) error {
 
 	globals.Debug("Starting log stream...")
 	if err := streamer.Start(ctx, device.UDID, opts); err != nil {
-		return c.outputError(globals, "STREAM_FAILED", err.Error())
+		return c.outputError(globals, "STREAM_FAILED", err.Error(), hintForStreamOrQuery(err))
 	}
-	defer streamer.Stop()
+	defer func() {
+		if err := streamer.Stop(); err != nil {
+			globals.Debug("failed to stop streamer: %v", err)
+		}
+	}()
 	globals.Debug("Log stream started successfully")
 
 	// Create output writer based on format
@@ -303,34 +336,54 @@ func (c *TailCmd) Run(globals *Globals) error {
 	}
 	setWriter(outputWriter)
 
-	// Create session tracker for detecting app relaunches
-	sessionTracker := session.NewTracker(c.App, device.Name, device.UDID, tailID, appVersion, appBuild)
+	// Create session tracker for detecting app relaunches (only meaningful when tailing an app)
+	var sessionTracker tailSessionTracker
+	if c.App != "" {
+		sessionTracker = session.NewTracker(c.App, device.Name, device.UDID, tailID, appVersion, appBuild)
+		globals.Debug("Session tracking enabled")
+	} else {
+		sessionTracker = &noopSessionTracker{}
+		globals.Debug("Session tracking disabled (no --app)")
+	}
 	log = newAgentLogger(globals, tailID, sessionTracker.CurrentSession)
-	globals.Debug("Session tracking enabled")
 
 	// Emit metadata for agents
 	if emitter != nil {
-		emitter.Metadata(Version, Commit, "")
+		if err := emitter.Metadata(Version, Commit, ""); err != nil {
+			return err
+		}
 	}
 
 	// Emit ready event when --wait-for-launch is used (signals log capture is active)
 	if c.WaitForLaunch {
 		if emitter != nil {
-			emitter.Ready(
+			if err := emitter.Ready(
 				clk.Now().UTC().Format(time.RFC3339Nano),
 				device.Name,
 				device.UDID,
 				c.App,
 				tailID,
 				sessionTracker.CurrentSession(),
-			)
+			); err != nil {
+				return err
+			}
 			if !c.NoAgentHints {
-				emitter.AgentHints(tailID, sessionTracker.CurrentSession(), defaultHints())
+				if err := emitter.AgentHints(tailID, sessionTracker.CurrentSession(), defaultHintsForTail(c.App != "")); err != nil {
+					return err
+				}
 			}
 		} else {
-			fmt.Fprintf(globals.Stderr, "%s\n", infoStyle.Render(fmt.Sprintf("Ready: log capture active for %s", c.App)))
+			target := c.App
+			if target == "" {
+				target = "all logs"
+			}
+			if _, err := fmt.Fprintf(globals.Stderr, "%s\n", infoStyle.Render(fmt.Sprintf("Ready: log capture active for %s", target))); err != nil {
+				globals.Debug("failed to write ready message: %v", err)
+			}
 			if !c.NoAgentHints {
-				fmt.Fprintf(globals.Stderr, "%s\n", warnStyle.Render(fmt.Sprintf("agent_hints: follow latest session, match tail_id=%s", tailID)))
+				if _, err := fmt.Fprintf(globals.Stderr, "%s\n", warnStyle.Render(fmt.Sprintf("agent_hints: match tail_id=%s", tailID))); err != nil {
+					globals.Debug("failed to write agent_hints message: %v", err)
+				}
 			}
 		}
 	}
@@ -406,11 +459,15 @@ func (c *TailCmd) Run(globals *Globals) error {
 		if c.NoAgentHints {
 			return
 		}
-		hints := defaultHints()
+		hints := defaultHintsForTail(c.App != "")
 		if globals.Format == "ndjson" {
-			output.NewNDJSONWriter(globals.Stdout).WriteAgentHints(tailID, sessionTracker.CurrentSession(), hints)
+			if err := output.NewNDJSONWriter(globals.Stdout).WriteAgentHints(tailID, sessionTracker.CurrentSession(), hints); err != nil {
+				globals.Debug("failed to write agent_hints: %v", err)
+			}
 		} else {
-			fmt.Fprintf(globals.Stderr, "[XCW] agent_hints: %s (tail_id=%s, session=%d)\n", strings.Join(hints, "; "), tailID, sessionTracker.CurrentSession())
+			if _, err := fmt.Fprintf(globals.Stderr, "[XCW] agent_hints: %s (tail_id=%s, session=%d)\n", strings.Join(hints, "; "), tailID, sessionTracker.CurrentSession()); err != nil {
+				globals.Debug("failed to write agent_hints: %v", err)
+			}
 		}
 	}
 
@@ -419,12 +476,20 @@ func (c *TailCmd) Run(globals *Globals) error {
 		select {
 		case <-ctx.Done():
 			// Output final summary
-			c.outputSummary(writer, streamer, tailID, clk.Now())
+			if err := c.outputSummary(writer, streamer, tailID, clk.Now()); err != nil {
+				return err
+			}
 			if final := sessionTracker.GetFinalSummary(); final != nil {
 				if emitter != nil {
-					emitter.SessionEnd(final)
-					emitter.ClearBuffer("session_end", tailID, final.Session)
-					emitter.Cutoff("sigint", tailID, final.Session, totalLogs)
+					if err := emitter.SessionEnd(final); err != nil {
+						return err
+					}
+					if err := emitter.ClearBuffer("session_end", tailID, final.Session); err != nil {
+						return err
+					}
+					if err := emitter.Cutoff("sigint", tailID, final.Session, totalLogs); err != nil {
+						return err
+					}
 				}
 			}
 			return nil
@@ -451,7 +516,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 					}
 				}
 				if emitter != nil && globals.Verbose && sessionChange.EndSession != nil && sessionChange.StartSession != nil {
-					emitter.SessionDebug(&output.SessionDebugOutput{
+					if err := emitter.SessionDebug(&output.SessionDebugOutput{
 						Type:        "session_debug",
 						TailID:      tailID,
 						Session:     sessionChange.StartSession.Session,
@@ -464,14 +529,20 @@ func (c *TailCmd) Run(globals *Globals) error {
 							"errors":     sessionChange.EndSession.Summary.Errors,
 							"faults":     sessionChange.EndSession.Summary.Faults,
 						},
-					})
+					}); err != nil {
+						return err
+					}
 				}
 				// Session changed - emit events
 				if sessionChange.EndSession != nil {
 					// Output session end with summary
 					if emitter != nil {
-						emitter.SessionEnd(sessionChange.EndSession)
-						emitter.ClearBuffer("session_end", tailID, sessionChange.EndSession.Session)
+						if err := emitter.SessionEnd(sessionChange.EndSession); err != nil {
+							return err
+						}
+						if err := emitter.ClearBuffer("session_end", tailID, sessionChange.EndSession.Session); err != nil {
+							return err
+						}
 						emitHints()
 					}
 				}
@@ -495,13 +566,19 @@ func (c *TailCmd) Run(globals *Globals) error {
 						}
 						msg := fmt.Sprintf("🚀 NEW SESSION: App relaunched (PID: %d)%s",
 							sessionChange.StartSession.PID, prevSummary)
-						fmt.Fprintf(globals.Stderr, "%s\n", bannerStyle.Render(msg))
+						if _, err := fmt.Fprintf(globals.Stderr, "%s\n", bannerStyle.Render(msg)); err != nil {
+							globals.Debug("failed to write session banner: %v", err)
+						}
 					}
 
 					// Output JSON session start event
 					if emitter != nil {
-						emitter.SessionStart(sessionChange.StartSession)
-						emitter.ClearBuffer("session_start", tailID, sessionChange.StartSession.Session)
+						if err := emitter.SessionStart(sessionChange.StartSession); err != nil {
+							return err
+						}
+						if err := emitter.ClearBuffer("session_start", tailID, sessionChange.StartSession.Session); err != nil {
+							return err
+						}
 						emitHints()
 					}
 
@@ -511,12 +588,14 @@ func (c *TailCmd) Run(globals *Globals) error {
 						if sessionChange.EndSession != nil {
 							prevSummary = &sessionChange.EndSession.Summary
 						}
-						tmuxMgr.WriteSessionBanner(
+						if err := tmuxMgr.WriteSessionBanner(
 							sessionChange.StartSession.Session,
 							c.App,
 							sessionChange.StartSession.PID,
 							prevSummary,
-						)
+						); err != nil {
+							globals.Debug("failed to write tmux session banner: %v", err)
+						}
 					}
 				}
 			}
@@ -552,9 +631,13 @@ func (c *TailCmd) Run(globals *Globals) error {
 			lastSeen = clk.Now()
 			if maxLogs > 0 && totalLogs >= maxLogs {
 				if final := sessionTracker.GetFinalSummary(); final != nil && globals.Format == "ndjson" {
-					emitter.SessionEnd(final)
-					emitter.Cutoff("max_logs", tailID, final.Session, totalLogs)
-					emitter.WriteHeartbeat(&output.Heartbeat{
+					if err := emitter.SessionEnd(final); err != nil {
+						return err
+					}
+					if err := emitter.Cutoff("max_logs", tailID, final.Session, totalLogs); err != nil {
+						return err
+					}
+					if err := emitter.WriteHeartbeat(&output.Heartbeat{
 						Type:              "heartbeat",
 						SchemaVersion:     output.SchemaVersion,
 						Timestamp:         clk.Now().UTC().Format(time.RFC3339Nano),
@@ -563,7 +646,9 @@ func (c *TailCmd) Run(globals *Globals) error {
 						TailID:            tailID,
 						LatestSession:     sessionTracker.CurrentSession(),
 						LastSeenTimestamp: lastSeen.UTC().Format(time.RFC3339Nano),
-					})
+					}); err != nil {
+						return err
+					}
 				}
 				return nil
 			}
@@ -572,9 +657,13 @@ func (c *TailCmd) Run(globals *Globals) error {
 			if !globals.Quiet {
 				if strings.HasPrefix(err.Error(), "reconnect_notice:") {
 					if emitter != nil {
-						emitter.WriteReconnect(err.Error(), tailID, "info")
+						if err := emitter.WriteReconnect(err.Error(), tailID, "info"); err != nil {
+							return err
+						}
 					} else {
-						fmt.Fprintf(globals.Stderr, "%s\n", err.Error())
+						if _, werr := fmt.Fprintf(globals.Stderr, "%s\n", err.Error()); werr != nil {
+							globals.Debug("failed to write reconnect notice: %v", werr)
+						}
 					}
 				} else {
 					emitWarning(globals, emitter, err.Error())
@@ -587,7 +676,9 @@ func (c *TailCmd) Run(globals *Globals) error {
 			}
 			return nil
 		}():
-			c.outputSummary(writer, streamer, tailID, clk.Now())
+			if err := c.outputSummary(writer, streamer, tailID, clk.Now()); err != nil {
+				return err
+			}
 
 		case <-func() <-chan time.Time {
 			if cutoffTimer != nil {
@@ -601,9 +692,13 @@ func (c *TailCmd) Run(globals *Globals) error {
 			// cutoff takes precedence
 			if cutoffTimer != nil {
 				if final := sessionTracker.GetFinalSummary(); final != nil && globals.Format == "ndjson" {
-					emitter.SessionEnd(final)
-					emitter.Cutoff("max_duration", tailID, final.Session, totalLogs)
-					emitter.WriteHeartbeat(&output.Heartbeat{
+					if err := emitter.SessionEnd(final); err != nil {
+						return err
+					}
+					if err := emitter.Cutoff("max_duration", tailID, final.Session, totalLogs); err != nil {
+						return err
+					}
+					if err := emitter.WriteHeartbeat(&output.Heartbeat{
 						Type:              "heartbeat",
 						SchemaVersion:     output.SchemaVersion,
 						Timestamp:         clk.Now().UTC().Format(time.RFC3339Nano),
@@ -612,7 +707,9 @@ func (c *TailCmd) Run(globals *Globals) error {
 						TailID:            tailID,
 						LatestSession:     sessionTracker.CurrentSession(),
 						LastSeenTimestamp: lastSeen.UTC().Format(time.RFC3339Nano),
-					})
+					}); err != nil {
+						return err
+					}
 				}
 				return nil
 			}
@@ -628,7 +725,10 @@ func (c *TailCmd) Run(globals *Globals) error {
 				LatestSession:     sessionTracker.CurrentSession(),
 				LastSeenTimestamp: lastSeen.UTC().Format(time.RFC3339Nano),
 			}
-			writer.WriteHeartbeat(heartbeat)
+			if err := writer.WriteHeartbeat(heartbeat); err != nil {
+				heartbeatPool.Put(heartbeat)
+				return err
+			}
 			if log != nil {
 				log.Debug("heartbeat logs_since_last=%d latest_session=%d", logsSinceLast, heartbeat.LatestSession)
 			}
@@ -648,7 +748,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 						log.Debug("idle rollover -> %d (pid=%d)", sessionChange.StartSession.Session, sessionChange.StartSession.PID)
 					}
 					if emitter != nil && globals.Verbose && sessionChange.EndSession != nil && sessionChange.StartSession != nil {
-						emitter.SessionDebug(&output.SessionDebugOutput{
+						if err := emitter.SessionDebug(&output.SessionDebugOutput{
 							Type:        "session_debug",
 							TailID:      tailID,
 							Session:     sessionChange.StartSession.Session,
@@ -661,11 +761,17 @@ func (c *TailCmd) Run(globals *Globals) error {
 								"errors":     sessionChange.EndSession.Summary.Errors,
 								"faults":     sessionChange.EndSession.Summary.Faults,
 							},
-						})
+						}); err != nil {
+							return err
+						}
 					}
 					if sessionChange.EndSession != nil && emitter != nil {
-						emitter.SessionEnd(sessionChange.EndSession)
-						emitter.ClearBuffer("session_end", tailID, sessionChange.EndSession.Session)
+						if err := emitter.SessionEnd(sessionChange.EndSession); err != nil {
+							return err
+						}
+						if err := emitter.ClearBuffer("session_end", tailID, sessionChange.EndSession.Session); err != nil {
+							return err
+						}
 						emitHints()
 					}
 					if pathBuilder != nil && sessionChange.StartSession != nil {
@@ -676,8 +782,12 @@ func (c *TailCmd) Run(globals *Globals) error {
 					}
 					if sessionChange.StartSession != nil {
 						if emitter != nil {
-							emitter.SessionStart(sessionChange.StartSession)
-							emitter.ClearBuffer("session_start", tailID, sessionChange.StartSession.Session)
+							if err := emitter.SessionStart(sessionChange.StartSession); err != nil {
+								return err
+							}
+							if err := emitter.ClearBuffer("session_start", tailID, sessionChange.StartSession.Session); err != nil {
+								return err
+							}
 							emitHints()
 						}
 						if tmuxMgr != nil {
@@ -685,12 +795,14 @@ func (c *TailCmd) Run(globals *Globals) error {
 							if sessionChange.EndSession != nil {
 								prevSummary = &sessionChange.EndSession.Summary
 							}
-							tmuxMgr.WriteSessionBanner(
+							if err := tmuxMgr.WriteSessionBanner(
 								sessionChange.StartSession.Session,
 								c.App,
 								sessionChange.StartSession.PID,
 								prevSummary,
-							)
+							); err != nil {
+								globals.Debug("failed to write tmux session banner: %v", err)
+							}
 						}
 					}
 				}
@@ -703,7 +815,7 @@ func (c *TailCmd) Run(globals *Globals) error {
 
 func (c *TailCmd) outputSummary(writer interface {
 	WriteSummary(*domain.LogSummary) error
-}, streamer *simulator.Streamer, tailID string, now time.Time) {
+}, streamer *simulator.Streamer, tailID string, now time.Time) error {
 	total, errors, faults := streamer.GetStats()
 	summary := &domain.LogSummary{
 		Type:       "summary",
@@ -715,11 +827,11 @@ func (c *TailCmd) outputSummary(writer interface {
 		WindowEnd:  now,
 		TailID:     tailID,
 	}
-	writer.WriteSummary(summary)
+	return writer.WriteSummary(summary)
 }
 
-func (c *TailCmd) outputError(globals *Globals, code, message string) error {
-	return outputErrorCommon(globals, code, message)
+func (c *TailCmd) outputError(globals *Globals, code, message string, hint ...string) error {
+	return outputErrorCommon(globals, code, message, hint...)
 }
 
 func generateTailID() string {
@@ -738,6 +850,17 @@ func defaultHints() []string {
 		"match tail_id to current tail invocation",
 		"reset caches on clear_buffer/session_start/session_end",
 		"use newest rotated file unless comparing runs",
+	}
+}
+
+func defaultHintsForTail(hasApp bool) []string {
+	if hasApp {
+		return defaultHints()
+	}
+	return []string{
+		"match tail_id to current tail invocation",
+		"no session tracking when --app is omitted",
+		"use --predicate to narrow at source; --all is intentionally broad",
 	}
 }
 
@@ -773,7 +896,7 @@ func applyTailDefaults(cfg *config.Config, c *TailCmd) {
 			c.Simulator = cfg.Defaults.Simulator
 		}
 	}
-	if c.App == "" && cfg.Tail.App != "" {
+	if c.App == "" && c.Predicate == "" && cfg.Tail.App != "" {
 		c.App = cfg.Tail.App
 	}
 	if c.SummaryInterval == "" && cfg.Tail.SummaryInterval != "" {

@@ -27,7 +27,8 @@ import (
 type WatchCmd struct {
 	Simulator           string   `short:"s" help:"Simulator name or UDID"`
 	Booted              bool     `short:"b" help:"Use booted simulator (error if multiple)"`
-	App                 string   `short:"a" required:"" help:"App bundle identifier to filter logs"`
+	App                 string   `short:"a" help:"App bundle identifier to filter logs (required unless --predicate or --all)"`
+	All                 bool     `help:"Allow streaming without --app/--predicate (can be very noisy)"`
 	Pattern             string   `short:"p" aliases:"filter" help:"Regex pattern to filter log messages"`
 	Exclude             string   `short:"x" help:"Regex pattern to exclude from log messages"`
 	ExcludeSubsystem    []string `help:"Exclude logs from subsystem (can be repeated, supports * wildcard)"`
@@ -126,6 +127,9 @@ func (c *WatchCmd) Run(globals *Globals) error {
 	if err := validateFlags(globals, false, false); err != nil {
 		return err
 	}
+	if err := validateAppPredicateAll(c.App, c.Predicate, c.All, false); err != nil {
+		return outputErrorCommon(globals, err.Code, err.Message, err.Hint)
+	}
 
 	// Find the simulator
 	mgr := simulator.NewManager()
@@ -136,7 +140,7 @@ func (c *WatchCmd) Run(globals *Globals) error {
 		device, err = mgr.FindBootedDevice(ctx)
 	}
 	if err != nil {
-		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error())
+		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error(), hintForStreamOrQuery(err))
 	}
 
 	// Determine output destination
@@ -170,20 +174,32 @@ func (c *WatchCmd) Run(globals *Globals) error {
 		if err != nil {
 			return c.outputError(globals, "FILE_CREATE_ERROR", fmt.Sprintf("failed to create output file: %s", err))
 		}
-		defer outputFile.Close()
+		defer func() {
+			if err := outputFile.Close(); err != nil {
+				globals.Debug("failed to close output file: %v", err)
+			}
+		}()
 
 		bufferedWriter = bufio.NewWriter(outputFile)
-		defer bufferedWriter.Flush()
+		defer func() {
+			if err := bufferedWriter.Flush(); err != nil {
+				globals.Debug("failed to flush output buffer: %v", err)
+			}
+		}()
 
 		outputWriter = bufferedWriter
 
 		if !globals.Quiet {
 			if globals.Format == "ndjson" {
-				output.NewNDJSONWriter(globals.Stdout).WriteInfo(
+				if err := output.NewNDJSONWriter(globals.Stdout).WriteInfo(
 					fmt.Sprintf("Writing logs to %s", outputPath),
-					device.Name, device.UDID, "", "")
+					device.Name, device.UDID, "", ""); err != nil {
+					return err
+				}
 			} else {
-				fmt.Fprintf(globals.Stderr, "Writing logs to %s\n", outputPath)
+				if _, err := fmt.Fprintf(globals.Stderr, "Writing logs to %s\n", outputPath); err != nil {
+					globals.Debug("failed to write output path: %v", err)
+				}
 			}
 		}
 	}
@@ -205,13 +221,21 @@ func (c *WatchCmd) Run(globals *Globals) error {
 			if err == nil {
 				if err := tmuxMgr.GetOrCreateSession(); err == nil {
 					outputWriter = tmux.NewWriter(tmuxMgr)
-					tmuxMgr.ClearPaneWithBanner(fmt.Sprintf("Watching: %s (%s) [TRIGGER MODE]", device.Name, c.App))
+					if err := tmuxMgr.ClearPaneWithBanner(fmt.Sprintf("Watching: %s (%s) [TRIGGER MODE]", device.Name, c.App)); err != nil {
+						emitWarning(globals, output.NewEmitter(globals.Stdout), fmt.Sprintf("failed to clear tmux pane: %v", err))
+					}
 
 					if globals.Format == "ndjson" {
-						output.NewNDJSONWriter(globals.Stdout).WriteTmux(sessionName, tmuxMgr.AttachCommand())
+						if err := output.NewNDJSONWriter(globals.Stdout).WriteTmux(sessionName, tmuxMgr.AttachCommand()); err != nil {
+							return err
+						}
 					} else {
-						fmt.Fprintf(globals.Stdout, "Tmux session: %s\n", sessionName)
-						fmt.Fprintf(globals.Stdout, "Attach with: %s\n", tmuxMgr.AttachCommand())
+						if _, err := fmt.Fprintf(globals.Stdout, "Tmux session: %s\n", sessionName); err != nil {
+							return err
+						}
+						if _, err := fmt.Fprintf(globals.Stdout, "Attach with: %s\n", tmuxMgr.AttachCommand()); err != nil {
+							return err
+						}
 					}
 				}
 			}
@@ -225,23 +249,39 @@ func (c *WatchCmd) Run(globals *Globals) error {
 	// Output watch info
 	if !globals.Quiet && tmuxMgr == nil {
 		if globals.Format == "ndjson" {
-			output.NewNDJSONWriter(globals.Stdout).WriteInfo(
+			if err := output.NewNDJSONWriter(globals.Stdout).WriteInfo(
 				fmt.Sprintf("Watching logs from %s", device.Name),
-				device.Name, device.UDID, "", "trigger")
+				device.Name, device.UDID, "", "trigger"); err != nil {
+				return err
+			}
 		} else {
-			fmt.Fprintf(globals.Stderr, "%s\n", watchInfoStyle.Render(fmt.Sprintf("Watching logs from %s (%s)", device.Name, device.UDID)))
-			fmt.Fprintf(globals.Stderr, "App: %s\n", c.App)
+			if _, err := fmt.Fprintf(globals.Stderr, "%s\n", watchInfoStyle.Render(fmt.Sprintf("Watching logs from %s (%s)", device.Name, device.UDID))); err != nil {
+				globals.Debug("failed to write watch info: %v", err)
+			}
+			if _, err := fmt.Fprintf(globals.Stderr, "App: %s\n", c.App); err != nil {
+				globals.Debug("failed to write watch info: %v", err)
+			}
 			if c.OnError != "" {
-				fmt.Fprintf(globals.Stderr, "%s\n", watchWarnStyle.Render(fmt.Sprintf("On error: %s", c.OnError)))
+				if _, err := fmt.Fprintf(globals.Stderr, "%s\n", watchWarnStyle.Render(fmt.Sprintf("On error: %s", c.OnError))); err != nil {
+					globals.Debug("failed to write watch info: %v", err)
+				}
 			}
 			if c.OnFault != "" {
-				fmt.Fprintf(globals.Stderr, "%s\n", watchWarnStyle.Render(fmt.Sprintf("On fault: %s", c.OnFault)))
+				if _, err := fmt.Fprintf(globals.Stderr, "%s\n", watchWarnStyle.Render(fmt.Sprintf("On fault: %s", c.OnFault))); err != nil {
+					globals.Debug("failed to write watch info: %v", err)
+				}
 			}
 			for _, t := range triggers {
-				fmt.Fprintf(globals.Stderr, "On pattern '%s': %s\n", t.pattern.String(), t.command)
+				if _, err := fmt.Fprintf(globals.Stderr, "On pattern '%s': %s\n", t.pattern.String(), t.command); err != nil {
+					globals.Debug("failed to write watch info: %v", err)
+				}
 			}
-			fmt.Fprintf(globals.Stderr, "Cooldown: %s\n", c.Cooldown)
-			fmt.Fprintln(globals.Stderr, "Press Ctrl+C to stop")
+			if _, err := fmt.Fprintf(globals.Stderr, "Cooldown: %s\n", c.Cooldown); err != nil {
+				globals.Debug("failed to write watch info: %v", err)
+			}
+			if _, err := fmt.Fprintln(globals.Stderr, "Press Ctrl+C to stop"); err != nil {
+				globals.Debug("failed to write watch info: %v", err)
+			}
 		}
 	}
 
@@ -252,11 +292,11 @@ func (c *WatchCmd) Run(globals *Globals) error {
 	}
 	pipeline, err := buildPipeline(c.Pattern, excludeList, nil)
 	if err != nil {
-		return c.outputError(globals, "INVALID_FILTER", err.Error())
+		return c.outputError(globals, "INVALID_FILTER", err.Error(), hintForFilter(err))
 	}
 	pattern, excludePatterns, _, err := buildFilters(c.Pattern, excludeList, nil)
 	if err != nil {
-		return c.outputError(globals, "INVALID_FILTER", err.Error())
+		return c.outputError(globals, "INVALID_FILTER", err.Error(), hintForFilter(err))
 	}
 
 	// Determine log level (command-specific overrides global)
@@ -264,22 +304,26 @@ func (c *WatchCmd) Run(globals *Globals) error {
 
 	// Create streamer
 	streamer := simulator.NewStreamer(mgr)
-		opts := simulator.StreamOptions{
-			BundleID:          c.App,
-			MinLevel:          minLevel,
-			MaxLevel:          maxLevel,
-			Pattern:           pattern,
-			ExcludePatterns:   excludePatterns,
-			ExcludeSubsystems: c.ExcludeSubsystem,
-			BufferSize:        100,
-			RawPredicate:      c.Predicate,
-			Verbose:           globals.Verbose,
-		}
+	opts := simulator.StreamOptions{
+		BundleID:          c.App,
+		MinLevel:          minLevel,
+		MaxLevel:          maxLevel,
+		Pattern:           pattern,
+		ExcludePatterns:   excludePatterns,
+		ExcludeSubsystems: c.ExcludeSubsystem,
+		BufferSize:        100,
+		RawPredicate:      c.Predicate,
+		Verbose:           globals.Verbose,
+	}
 
 	if err := streamer.Start(ctx, device.UDID, opts); err != nil {
-		return c.outputError(globals, "STREAM_FAILED", err.Error())
+		return c.outputError(globals, "STREAM_FAILED", err.Error(), hintForStreamOrQuery(err))
 	}
-	defer streamer.Stop()
+	defer func() {
+		if err := streamer.Stop(); err != nil {
+			globals.Debug("failed to stop streamer: %v", err)
+		}
+	}()
 
 	// Track last trigger times for cooldown
 	lastErrorTrigger := time.Time{}
@@ -356,18 +400,26 @@ func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, ent
 	default:
 		// Too many parallel triggers running, skip this one
 		if globals.Format == "ndjson" {
-			output.NewEmitter(globals.Stdout).WriteWarning(fmt.Sprintf("trigger skipped (max parallel %d reached): %s", cap(sem), command))
+			if err := output.NewEmitter(globals.Stdout).WriteWarning(fmt.Sprintf("trigger skipped (max parallel %d reached): %s", cap(sem), command)); err != nil {
+				globals.Debug("failed to write trigger warning: %v", err)
+			}
 		} else if !globals.Quiet {
-			fmt.Fprintf(globals.Stderr, "[TRIGGER SKIPPED] Max parallel triggers reached: %s\n", command)
+			if _, err := fmt.Fprintf(globals.Stderr, "[TRIGGER SKIPPED] Max parallel triggers reached: %s\n", command); err != nil {
+				globals.Debug("failed to write trigger warning: %v", err)
+			}
 		}
 		return
 	}
 
 	// Output trigger notification
 	if globals.Format == "ndjson" {
-		output.NewNDJSONWriter(globals.Stdout).WriteTrigger(triggerType, command, entry.Message)
+		if err := output.NewNDJSONWriter(globals.Stdout).WriteTrigger(triggerType, command, entry.Message); err != nil {
+			globals.Debug("failed to write trigger: %v", err)
+		}
 	} else if !globals.Quiet {
-		fmt.Fprintf(globals.Stderr, "[TRIGGER:%s] Running: %s\n", triggerType, command)
+		if _, err := fmt.Fprintf(globals.Stderr, "[TRIGGER:%s] Running: %s\n", triggerType, command); err != nil {
+			globals.Debug("failed to write trigger: %v", err)
+		}
 	}
 
 	// Run command in background (don't block log processing)
@@ -384,9 +436,13 @@ func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, ent
 			argv := strings.Fields(command)
 			if len(argv) == 0 {
 				if globals.Format == "ndjson" {
-					output.NewNDJSONWriter(globals.Stdout).WriteTriggerError(command, "empty trigger command")
+					if err := output.NewNDJSONWriter(globals.Stdout).WriteTriggerError(command, "empty trigger command"); err != nil {
+						globals.Debug("failed to write trigger error: %v", err)
+					}
 				} else if !globals.Quiet {
-					fmt.Fprintln(globals.Stderr, "[TRIGGER ERROR] empty trigger command")
+					if _, err := fmt.Fprintln(globals.Stderr, "[TRIGGER ERROR] empty trigger command"); err != nil {
+						globals.Debug("failed to write trigger error: %v", err)
+					}
 				}
 				return
 			}
@@ -419,18 +475,26 @@ func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, ent
 					errMsg = fmt.Sprintf("timeout after %s", timeout)
 				}
 				if globals.Format == "ndjson" {
-					output.NewNDJSONWriter(globals.Stdout).WriteTriggerError(command, errMsg)
+					if err := output.NewNDJSONWriter(globals.Stdout).WriteTriggerError(command, errMsg); err != nil {
+						globals.Debug("failed to write trigger error: %v", err)
+					}
 				} else if !globals.Quiet {
-					fmt.Fprintf(globals.Stderr, "[TRIGGER ERROR] %s: %s\n", command, errMsg)
+					if _, err := fmt.Fprintf(globals.Stderr, "[TRIGGER ERROR] %s: %s\n", command, errMsg); err != nil {
+						globals.Debug("failed to write trigger error: %v", err)
+					}
 				}
 			}
 			if len(out) > 0 && !globals.Quiet {
 				if globals.Format == "ndjson" {
-					output.NewNDJSONWriter(globals.Stdout).WriteInfo(
+					if err := output.NewNDJSONWriter(globals.Stdout).WriteInfo(
 						fmt.Sprintf("trigger output: %s", strings.TrimSpace(string(out))),
-						"", "", "", "")
+						"", "", "", ""); err != nil {
+						globals.Debug("failed to write trigger output: %v", err)
+					}
 				} else {
-					fmt.Fprintf(globals.Stderr, "[TRIGGER OUTPUT] %s\n", strings.TrimSpace(string(out)))
+					if _, err := fmt.Fprintf(globals.Stderr, "[TRIGGER OUTPUT] %s\n", strings.TrimSpace(string(out))); err != nil {
+						globals.Debug("failed to write trigger output: %v", err)
+					}
 				}
 			}
 			return
@@ -445,16 +509,20 @@ func (c *WatchCmd) runTrigger(globals *Globals, triggerType, command string, ent
 				errMsg = fmt.Sprintf("timeout after %s", timeout)
 			}
 			if globals.Format == "ndjson" {
-				output.NewNDJSONWriter(globals.Stdout).WriteTriggerError(command, errMsg)
+				if err := output.NewNDJSONWriter(globals.Stdout).WriteTriggerError(command, errMsg); err != nil {
+					globals.Debug("failed to write trigger error: %v", err)
+				}
 			} else if !globals.Quiet {
-				fmt.Fprintf(globals.Stderr, "[TRIGGER ERROR] %s: %s\n", command, errMsg)
+				if _, err := fmt.Fprintf(globals.Stderr, "[TRIGGER ERROR] %s: %s\n", command, errMsg); err != nil {
+					globals.Debug("failed to write trigger error: %v", err)
+				}
 			}
 		}
 	}()
 }
 
-func (c *WatchCmd) outputError(globals *Globals, code, message string) error {
-	return outputErrorCommon(globals, code, message)
+func (c *WatchCmd) outputError(globals *Globals, code, message string, hint ...string) error {
+	return outputErrorCommon(globals, code, message, hint...)
 }
 
 func applyWatchDefaults(cfg *config.Config, c *WatchCmd) {
@@ -468,7 +536,7 @@ func applyWatchDefaults(cfg *config.Config, c *WatchCmd) {
 			c.Simulator = cfg.Defaults.Simulator
 		}
 	}
-	if c.App == "" && cfg.Watch.App != "" {
+	if c.App == "" && c.Predicate == "" && cfg.Watch.App != "" {
 		c.App = cfg.Watch.App
 	}
 	if c.Cooldown == "5s" && cfg.Watch.Cooldown != "" {

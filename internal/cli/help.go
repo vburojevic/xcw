@@ -64,12 +64,24 @@ type WorkflowDoc struct {
 // Run executes the help command
 func (c *HelpCmd) Run(globals *Globals) error {
 	if !c.JSON {
-		fmt.Fprintln(globals.Stdout, "Usage: xcw help --json")
-		fmt.Fprintln(globals.Stdout, "")
-		fmt.Fprintln(globals.Stdout, "Output complete xcw documentation as JSON for AI agents.")
-		fmt.Fprintln(globals.Stdout, "")
-		fmt.Fprintln(globals.Stdout, "For human-readable help, use: xcw --help")
-		fmt.Fprintln(globals.Stdout, "For usage examples, use: xcw examples")
+		if _, err := fmt.Fprintln(globals.Stdout, "Usage: xcw help --json"); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(globals.Stdout, "Output complete xcw documentation as JSON for AI agents."); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(globals.Stdout, "For human-readable help, use: xcw --help"); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(globals.Stdout, "For usage examples, use: xcw examples"); err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -78,7 +90,9 @@ func (c *HelpCmd) Run(globals *Globals) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(globals.Stdout, string(data))
+	if _, err := fmt.Fprintln(globals.Stdout, string(data)); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -95,6 +109,7 @@ func buildDocumentation() *HelpOutput {
 			"stream_logs":          `xcw tail -s "iPhone 17 Pro" -a com.example.myapp`,
 			"machine_friendly":     `xcw --machine-friendly tail -s "iPhone 17 Pro" -a com.example.myapp`,
 			"filter_by_field":      `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --where level=error`,
+			"filter_by_expr":       `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --where '(level=error OR level=fault) AND message~timeout'`,
 			"discover_log_sources": `xcw discover -s "iPhone 17 Pro" -a com.example.myapp --since 5m`,
 			"record_to_file":       `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --session-dir ~/.xcw/sessions`,
 			"analyze_session":      `xcw analyze $(xcw sessions show --latest)`,
@@ -103,8 +118,8 @@ func buildDocumentation() *HelpOutput {
 		Contract: defaultHints(),
 		Commands: map[string]CommandDoc{
 			"tail": {
-				Description: "Stream real-time logs from iOS Simulator",
-				Usage:       "xcw tail -s SIMULATOR -a APP [flags]",
+				Description: "Stream real-time logs from iOS Simulator (use -a unless --predicate/--all)",
+				Usage:       "xcw tail -s SIMULATOR [-a APP] [flags]",
 				Examples: []ExampleDoc{
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp`, Description: "Basic streaming to stdout"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --tmux`, Description: "Background with tmux (returns session name)"},
@@ -112,23 +127,26 @@ func buildDocumentation() *HelpOutput {
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp -l error`, Description: "Only error/fault level"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --filter "error|warn"`, Description: "Filter by regex (alias for --pattern)"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --wait-for-launch`, Description: "Start capture before app launches (emits ready event)"},
-					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --where level=error`, Description: "Filter by field (supports =, !=, ~, !~, >=, <=, ^, $)"},
+					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --where level=error`, Description: "Filter by field/expression (=, !=, ~, !~, >=, <=, ^, $, AND/OR/NOT, parentheses, /regex/i)"},
+					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --where '(level=error OR level=fault) AND message~timeout'`, Description: "Boolean where expression"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --where "message~timeout"`, Description: "Filter messages containing 'timeout'"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --dedupe`, Description: "Collapse repeated identical messages"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --process MyApp --process MyAppExtension`, Description: "Filter by process name"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp -x noise -x spam`, Description: "Exclude multiple patterns"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --session-idle 60s`, Description: "Force a new session boundary after 60s of inactivity"},
+					{Command: `xcw tail -s "iPhone 17 Pro" --predicate 'process == \"MyApp\"'`, Description: "Stream without -a using a raw predicate (advanced)"},
 				},
 				OutputTypes:     []string{"log", "session_start", "session_end", "ready", "summary", "heartbeat", "tmux", "error"},
 				RelatedCommands: []string{"query", "watch", "analyze", "discover"},
 			},
 			"query": {
-				Description: "Query historical logs from iOS Simulator",
-				Usage:       "xcw query -s SIMULATOR -a APP --since DURATION [flags]",
+				Description: "Query historical logs from iOS Simulator (use -a unless --predicate/--all)",
+				Usage:       "xcw query -s SIMULATOR [-a APP] --since DURATION [flags]",
 				Examples: []ExampleDoc{
 					{Command: `xcw query -s "iPhone 17 Pro" -a com.example.myapp --since 5m`, Description: "Last 5 minutes"},
 					{Command: `xcw query -s "iPhone 17 Pro" -a com.example.myapp --since 5m -l error`, Description: "Errors only"},
 					{Command: `xcw query -s "iPhone 17 Pro" -a com.example.myapp --since 10m --analyze`, Description: "With pattern analysis"},
+					{Command: `xcw query -s "iPhone 17 Pro" -a com.example.myapp --since 10m --where '(level=error OR level=fault) AND message~timeout'`, Description: "Where expression"},
 				},
 				OutputTypes:     []string{"log", "analysis", "error"},
 				RelatedCommands: []string{"tail", "analyze"},
@@ -491,7 +509,9 @@ func buildDocumentation() *HelpOutput {
 			"DEVICE_NOT_FOUND":    {Description: "Simulator not found by name or UDID", Recovery: "Run 'xcw list' to see available simulators"},
 			"NO_BOOTED_SIMULATOR": {Description: "No booted simulator when --booted used", Recovery: "Boot a simulator in Xcode or use 'xcrun simctl boot'"},
 			"INVALID_FLAGS":       {Description: "--simulator and --booted used together", Recovery: "Use only one of --simulator or --booted"},
+			"FILTER_REQUIRED":     {Description: "No source filter provided (refusing to run unfiltered by default)", Recovery: "Provide -a/--app or --predicate, or pass --all to intentionally stream/query all logs"},
 			"INVALID_PATTERN":     {Description: "Regex pattern compilation failed", Recovery: "Check regex syntax"},
+			"INVALID_FILTER":      {Description: "Filter parsing/compilation failed", Recovery: "Check regex/--where syntax; quote complex expressions"},
 			"INVALID_DURATION":    {Description: "Duration parsing failed", Recovery: "Use format like '5m', '1h', '30s'"},
 			"STREAM_FAILED":       {Description: "Log streaming failed", Recovery: "Check simulator is running and accessible"},
 			"QUERY_FAILED":        {Description: "Historical log query failed", Recovery: "Check simulator is running"},
@@ -499,6 +519,7 @@ func buildDocumentation() *HelpOutput {
 			"TMUX_NOT_INSTALLED":  {Description: "tmux not installed", Recovery: "Install with 'brew install tmux'"},
 			"TMUX_ERROR":          {Description: "tmux operation failed", Recovery: "Check tmux is working: 'tmux list-sessions'"},
 			"LIST_APPS_FAILED":    {Description: "Failed to list apps", Recovery: "Check simulator is booted"},
+			"TUI_FAILED":          {Description: "TUI exited with an error", Recovery: "Rerun with -v for debug output or use 'xcw tail' for non-interactive streaming"},
 		},
 		Workflows: []WorkflowDoc{
 			{

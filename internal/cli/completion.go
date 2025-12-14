@@ -84,8 +84,8 @@ _xcw_completions() {
 
 complete -F _xcw_completions xcw
 `
-	fmt.Fprint(globals.Stdout, script)
-	return nil
+	_, err := fmt.Fprint(globals.Stdout, script)
+	return err
 }
 
 func (c *CompletionCmd) generateZsh(globals *Globals) error {
@@ -184,8 +184,8 @@ _xcw() {
 
 compdef _xcw xcw
 `
-	fmt.Fprint(globals.Stdout, script)
-	return nil
+	_, err := fmt.Fprint(globals.Stdout, script)
+	return err
 }
 
 func (c *CompletionCmd) generateFish(globals *Globals) error {
@@ -247,6 +247,6 @@ complete -c xcw -n "__fish_seen_subcommand_from completion" -a "bash zsh fish"
 # Simulator completion
 complete -c xcw -n "__fish_seen_subcommand_from tail query watch; and __fish_contains_opt -s s simulator" -a "(xcrun simctl list devices booted -j 2>/dev/null | grep '\"name\"' | cut -d'\"' -f4; echo booted)"
 `
-	fmt.Fprint(globals.Stdout, script)
-	return nil
+	_, err := fmt.Fprint(globals.Stdout, script)
+	return err
 }

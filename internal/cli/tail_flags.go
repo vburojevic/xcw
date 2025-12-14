@@ -7,7 +7,7 @@ type TailFilterFlags struct {
 	ExcludeSubsystem []string `help:"Exclude logs from subsystem (can be repeated, supports * wildcard)"`
 	MinLevel         string   `help:"Minimum log level: debug, info, default, error, fault (overrides global --level)"`
 	MaxLevel         string   `help:"Maximum log level: debug, info, default, error, fault"`
-	Where            []string `short:"w" help:"Field filter (e.g., 'level=error', 'message~timeout'). Operators: =, !=, ~, !~, >=, <=, ^, $"`
+	Where            []string `short:"w" help:"Field filter expression (supports AND/OR/NOT, parentheses). Operators: =, !=, ~, !~, >=, <=, ^, $. Regex literals: /pattern/i"`
 	Dedupe           bool     `help:"Collapse repeated identical messages"`
 	DedupeWindow     string   `help:"Time window for deduplication (e.g., '5s', '1m'). Without this, only consecutive duplicates are collapsed"`
 	Process          []string `help:"Filter by process name (can be repeated)"`

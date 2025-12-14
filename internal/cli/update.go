@@ -51,18 +51,42 @@ func (c *UpdateCmd) outputNDJSON(globals *Globals) error {
 }
 
 func (c *UpdateCmd) outputText(globals *Globals) error {
-	fmt.Fprintln(globals.Stdout, "xcw update instructions")
-	fmt.Fprintln(globals.Stdout)
-	fmt.Fprintf(globals.Stdout, "Current version: %s (%s)\n", Version, Commit)
-	fmt.Fprintln(globals.Stdout)
-	fmt.Fprintln(globals.Stdout, "To upgrade via Homebrew:")
-	fmt.Fprintf(globals.Stdout, "  %s\n", homebrewCmd)
-	fmt.Fprintln(globals.Stdout)
-	fmt.Fprintln(globals.Stdout, "To upgrade via Go:")
-	fmt.Fprintf(globals.Stdout, "  %s\n", goInstallCmd)
-	fmt.Fprintln(globals.Stdout)
-	fmt.Fprintln(globals.Stdout, "For release notes, see:")
-	fmt.Fprintf(globals.Stdout, "  %s\n", releasesURL)
+	if _, err := fmt.Fprintln(globals.Stdout, "xcw update instructions"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "Current version: %s (%s)\n", Version, Commit); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout, "To upgrade via Homebrew:"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  %s\n", homebrewCmd); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout, "To upgrade via Go:"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  %s\n", goInstallCmd); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout, "For release notes, see:"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  %s\n", releasesURL); err != nil {
+		return err
+	}
 
 	return nil
 }

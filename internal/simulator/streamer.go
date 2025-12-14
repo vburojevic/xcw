@@ -150,9 +150,9 @@ func (s *Streamer) streamLoop(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			}
-					backoff = s.jitter(min(backoff*2, maxBackoff))
-					continue
-				}
+			backoff = s.jitter(min(backoff*2, maxBackoff))
+			continue
+		}
 
 		if !device.IsBooted() {
 			// Try to boot the device

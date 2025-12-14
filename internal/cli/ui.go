@@ -18,7 +18,8 @@ import (
 type UICmd struct {
 	Simulator        string   `short:"s" help:"Simulator name or UDID"`
 	Booted           bool     `short:"b" help:"Use booted simulator (error if multiple)"`
-	App              string   `short:"a" required:"" help:"App bundle identifier to filter logs"`
+	App              string   `short:"a" help:"App bundle identifier to filter logs (required unless --predicate or --all)"`
+	All              bool     `help:"Allow streaming without --app/--predicate (can be very noisy)"`
 	Pattern          string   `short:"p" aliases:"filter" help:"Regex pattern to filter log messages"`
 	Exclude          string   `short:"x" help:"Regex pattern to exclude from log messages"`
 	ExcludeSubsystem []string `help:"Exclude logs from subsystem (can be repeated, supports * wildcard)"`
@@ -43,7 +44,10 @@ func (c *UICmd) Run(globals *Globals) error {
 
 	// Validate mutual exclusivity of flags
 	if c.Simulator != "" && c.Booted {
-		return fmt.Errorf("--simulator and --booted are mutually exclusive")
+		return outputErrorCommon(globals, "INVALID_FLAGS", "--simulator and --booted are mutually exclusive", "use only one of --simulator or --booted")
+	}
+	if err := validateAppPredicateAll(c.App, c.Predicate, c.All, len(c.Subsystem) > 0 || len(c.Category) > 0); err != nil {
+		return outputErrorCommon(globals, err.Code, err.Message, err.Hint)
 	}
 
 	// Find the simulator
@@ -59,7 +63,7 @@ func (c *UICmd) Run(globals *Globals) error {
 		device, err = mgr.FindBootedDevice(ctx)
 	}
 	if err != nil {
-		return fmt.Errorf("device not found: %w", err)
+		return outputErrorCommon(globals, "DEVICE_NOT_FOUND", err.Error(), hintForStreamOrQuery(err))
 	}
 	globals.Debug("Found device: %s (UDID: %s)", device.Name, device.UDID)
 
@@ -68,7 +72,7 @@ func (c *UICmd) Run(globals *Globals) error {
 	if c.Pattern != "" {
 		pattern, err = regexp.Compile(c.Pattern)
 		if err != nil {
-			return fmt.Errorf("invalid regex pattern: %w", err)
+			return outputErrorCommon(globals, "INVALID_PATTERN", fmt.Sprintf("invalid regex pattern: %v", err), "check regex syntax")
 		}
 	}
 
@@ -77,34 +81,42 @@ func (c *UICmd) Run(globals *Globals) error {
 	if c.Exclude != "" {
 		excludePattern, err := regexp.Compile(c.Exclude)
 		if err != nil {
-			return fmt.Errorf("invalid exclude regex pattern: %w", err)
+			return outputErrorCommon(globals, "INVALID_PATTERN", fmt.Sprintf("invalid exclude regex pattern: %v", err), "check regex syntax")
 		}
 		excludePatterns = append(excludePatterns, excludePattern)
 	}
 
 	// Create streamer
 	streamer := simulator.NewStreamer(mgr)
-		opts := simulator.StreamOptions{
-			BundleID:          c.App,
-			Subsystems:        c.Subsystem,
-			Categories:        c.Category,
-			MinLevel:          domain.ParseLogLevel(globals.Level),
-			Pattern:           pattern,
-			ExcludePatterns:   excludePatterns,
-			ExcludeSubsystems: c.ExcludeSubsystem,
-			BufferSize:        c.BufferSize,
-			RawPredicate:      c.Predicate,
-			Verbose:           globals.Verbose,
-		}
+	opts := simulator.StreamOptions{
+		BundleID:          c.App,
+		Subsystems:        c.Subsystem,
+		Categories:        c.Category,
+		MinLevel:          domain.ParseLogLevel(globals.Level),
+		Pattern:           pattern,
+		ExcludePatterns:   excludePatterns,
+		ExcludeSubsystems: c.ExcludeSubsystem,
+		BufferSize:        c.BufferSize,
+		RawPredicate:      c.Predicate,
+		Verbose:           globals.Verbose,
+	}
 
 	globals.Debug("Starting log stream for TUI...")
 	if err := streamer.Start(ctx, device.UDID, opts); err != nil {
-		return fmt.Errorf("failed to start stream: %w", err)
+		return outputErrorCommon(globals, "STREAM_FAILED", err.Error(), hintForStreamOrQuery(err))
 	}
-	defer streamer.Stop()
+	defer func() {
+		if err := streamer.Stop(); err != nil {
+			globals.Debug("failed to stop streamer: %v", err)
+		}
+	}()
 
 	// Create TUI model
-	model := tui.New(c.App, device.Name, streamer.Logs(), streamer.Errors())
+	appLabel := c.App
+	if appLabel == "" {
+		appLabel = "all logs"
+	}
+	model := tui.New(appLabel, device.Name, streamer.Logs(), streamer.Errors())
 
 	// Run the TUI
 	p := tea.NewProgram(model, tea.WithAltScreen())
@@ -116,7 +128,7 @@ func (c *UICmd) Run(globals *Globals) error {
 	}()
 
 	if _, err := p.Run(); err != nil {
-		return fmt.Errorf("TUI error: %w", err)
+		return outputErrorCommon(globals, "TUI_FAILED", err.Error())
 	}
 
 	return nil

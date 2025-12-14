@@ -7,7 +7,7 @@ BUILD_TIME ?= $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 
 LDFLAGS=-ldflags "-X github.com/vburojevic/xcw/internal/cli.Version=$(VERSION) -X github.com/vburojevic/xcw/internal/cli.Commit=$(COMMIT)"
 
-.PHONY: all build clean test install uninstall release help
+.PHONY: all build clean test install uninstall release help docs schema tidy fmt lint
 
 all: build
 

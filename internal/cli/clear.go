@@ -38,10 +38,14 @@ func (c *ClearCmd) Run(globals *Globals) error {
 
 	// Output success
 	if globals.Format == "ndjson" {
-		output.NewNDJSONWriter(globals.Stdout).WriteInfo(
-			fmt.Sprintf("Session %s cleared", c.Session), "", "", "", "")
+		if err := output.NewNDJSONWriter(globals.Stdout).WriteInfo(
+			fmt.Sprintf("Session %s cleared", c.Session), "", "", "", ""); err != nil {
+			return err
+		}
 	} else {
-		fmt.Fprintf(globals.Stdout, "Session %s cleared\n", c.Session)
+		if _, err := fmt.Fprintf(globals.Stdout, "Session %s cleared\n", c.Session); err != nil {
+			return err
+		}
 	}
 
 	return nil

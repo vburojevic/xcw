@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2025-12-14
+
+### Added
+- Explicit `--all` guardrail for running `tail`/`query`/`watch`/`ui` without `--app` or `--predicate` (intentionally broad output).
+- Boolean `--where` expressions: `AND`/`OR`/`NOT`, parentheses, and regex literals like `message~/timeout|crash/i`.
+
+### Changed
+- `--app` is no longer required when `--predicate` is provided (or when `--all` is set) for `tail`/`query`/`watch`/`ui`; `tail` disables session tracking when `--app` is omitted.
+- Improved structured error hints (NDJSON `error.hint`) for common simulator selection and Xcode tooling failures; `ui` now emits consistent structured errors.
+
 ## [0.16.0] - 2025-12-11
 
 ### Added

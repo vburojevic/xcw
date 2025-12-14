@@ -312,7 +312,7 @@ func TestListSessions(t *testing.T) {
 			"20251209-110000-app.ndjson",
 		}
 		for _, f := range files {
-			os.WriteFile(filepath.Join(tmpDir, f), []byte("test"), 0644)
+			require.NoError(t, os.WriteFile(filepath.Join(tmpDir, f), []byte("test"), 0644))
 		}
 
 		sessions, err := ListSessions(tmpDir)
@@ -333,9 +333,9 @@ func TestListSessions(t *testing.T) {
 
 	t.Run("ignores non-ndjson files", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		os.WriteFile(filepath.Join(tmpDir, "20251209-100000-app.ndjson"), []byte("test"), 0644)
-		os.WriteFile(filepath.Join(tmpDir, "other.txt"), []byte("test"), 0644)
-		os.WriteFile(filepath.Join(tmpDir, "readme.md"), []byte("test"), 0644)
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "20251209-100000-app.ndjson"), []byte("test"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "other.txt"), []byte("test"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "readme.md"), []byte("test"), 0644))
 
 		sessions, err := ListSessions(tmpDir)
 		require.NoError(t, err)
@@ -353,7 +353,7 @@ func TestLatestSession(t *testing.T) {
 			"20251209-110000-app.ndjson",
 		}
 		for _, f := range files {
-			os.WriteFile(filepath.Join(tmpDir, f), []byte("test"), 0644)
+			require.NoError(t, os.WriteFile(filepath.Join(tmpDir, f), []byte("test"), 0644))
 		}
 
 		session, err := LatestSession(tmpDir)
@@ -382,7 +382,7 @@ func TestCleanOldSessions(t *testing.T) {
 			"20251209-140000-app.ndjson",
 		}
 		for _, f := range files {
-			os.WriteFile(filepath.Join(tmpDir, f), []byte("test"), 0644)
+			require.NoError(t, os.WriteFile(filepath.Join(tmpDir, f), []byte("test"), 0644))
 		}
 
 		deleted, err := CleanOldSessions(tmpDir, 2)
@@ -390,7 +390,8 @@ func TestCleanOldSessions(t *testing.T) {
 		assert.Len(t, deleted, 3)
 
 		// Verify only 2 remain
-		remaining, _ := ListSessions(tmpDir)
+		remaining, err := ListSessions(tmpDir)
+		require.NoError(t, err)
 		assert.Len(t, remaining, 2)
 
 		// Should keep the newest
@@ -400,7 +401,7 @@ func TestCleanOldSessions(t *testing.T) {
 
 	t.Run("does nothing if fewer sessions than keep count", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		os.WriteFile(filepath.Join(tmpDir, "20251209-100000-app.ndjson"), []byte("test"), 0644)
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "20251209-100000-app.ndjson"), []byte("test"), 0644))
 
 		deleted, err := CleanOldSessions(tmpDir, 5)
 		require.NoError(t, err)
@@ -446,9 +447,9 @@ func TestAnalyzeCmd_Run(t *testing.T) {
 	require.NoError(t, err)
 	encoder := json.NewEncoder(f)
 	for _, entry := range entries {
-		encoder.Encode(entry)
+		require.NoError(t, encoder.Encode(entry))
 	}
-	f.Close()
+	require.NoError(t, f.Close())
 
 	t.Run("analyzes log file in text format", func(t *testing.T) {
 		globals, stdout, _ := testGlobals("text")
@@ -490,7 +491,7 @@ func TestAnalyzeCmd_Run(t *testing.T) {
 
 	t.Run("returns error for empty file", func(t *testing.T) {
 		emptyFile := filepath.Join(tmpDir, "empty.ndjson")
-		os.WriteFile(emptyFile, []byte{}, 0644)
+		require.NoError(t, os.WriteFile(emptyFile, []byte{}, 0644))
 
 		globals, _, _ := testGlobals("text")
 		cmd := &AnalyzeCmd{File: emptyFile}
@@ -543,9 +544,9 @@ func TestReplayCmd_Run(t *testing.T) {
 	require.NoError(t, err)
 	encoder := json.NewEncoder(f)
 	for _, entry := range entries {
-		encoder.Encode(entry)
+		require.NoError(t, encoder.Encode(entry))
 	}
-	f.Close()
+	require.NoError(t, f.Close())
 
 	t.Run("replays log file in text format", func(t *testing.T) {
 		globals, stdout, _ := testGlobals("text")

@@ -43,7 +43,7 @@ func (c *DiscoverCmd) Run(globals *Globals) error {
 		device, err = mgr.FindBootedDevice(ctx)
 	}
 	if err != nil {
-		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error())
+		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error(), hintForStreamOrQuery(err))
 	}
 	globals.Debug("Found device: %s (UDID: %s)", device.Name, device.UDID)
 
@@ -60,14 +60,24 @@ func (c *DiscoverCmd) Run(globals *Globals) error {
 			if c.App != "" {
 				msg = fmt.Sprintf("Discovering logs from %s for %s (last %s)", device.Name, c.App, c.Since)
 			}
-			output.NewNDJSONWriter(globals.Stdout).WriteInfo(msg, device.Name, device.UDID, c.Since, "discovery")
-		} else {
-			fmt.Fprintf(globals.Stderr, "Discovering logs from %s (%s)\n", device.Name, device.UDID)
-			fmt.Fprintf(globals.Stderr, "Time range: last %s\n", c.Since)
-			if c.App != "" {
-				fmt.Fprintf(globals.Stderr, "Filtering by app: %s\n", c.App)
+			if err := output.NewNDJSONWriter(globals.Stdout).WriteInfo(msg, device.Name, device.UDID, c.Since, "discovery"); err != nil {
+				return err
 			}
-			fmt.Fprintln(globals.Stderr)
+		} else {
+			if _, err := fmt.Fprintf(globals.Stderr, "Discovering logs from %s (%s)\n", device.Name, device.UDID); err != nil {
+				globals.Debug("failed to write discovery info: %v", err)
+			}
+			if _, err := fmt.Fprintf(globals.Stderr, "Time range: last %s\n", c.Since); err != nil {
+				globals.Debug("failed to write discovery info: %v", err)
+			}
+			if c.App != "" {
+				if _, err := fmt.Fprintf(globals.Stderr, "Filtering by app: %s\n", c.App); err != nil {
+					globals.Debug("failed to write discovery info: %v", err)
+				}
+			}
+			if _, err := fmt.Fprintln(globals.Stderr); err != nil {
+				globals.Debug("failed to write discovery info: %v", err)
+			}
 		}
 	}
 
@@ -85,7 +95,7 @@ func (c *DiscoverCmd) Run(globals *Globals) error {
 	globals.Debug("Executing discovery query...")
 	entries, err := reader.Query(ctx, device.UDID, opts)
 	if err != nil {
-		return c.outputError(globals, "QUERY_FAILED", err.Error())
+		return c.outputError(globals, "QUERY_FAILED", err.Error(), hintForStreamOrQuery(err))
 	}
 	globals.Debug("Query returned %d entries", len(entries))
 
@@ -99,7 +109,9 @@ func (c *DiscoverCmd) Run(globals *Globals) error {
 			return err
 		}
 	} else {
-		c.printTextOutput(globals, discovery)
+		if err := c.printTextOutput(globals, discovery); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -211,56 +223,97 @@ func (c *DiscoverCmd) aggregate(entries []domain.LogEntry, app string) *domain.D
 }
 
 // printTextOutput outputs discovery results in human-readable format
-func (c *DiscoverCmd) printTextOutput(globals *Globals, d *domain.Discovery) {
-	fmt.Fprintf(globals.Stdout, "=== Log Discovery ===\n\n")
-	fmt.Fprintf(globals.Stdout, "Total logs: %d\n", d.TotalCount)
-	fmt.Fprintf(globals.Stdout, "Time range: %s to %s\n\n", d.TimeRange.Start, d.TimeRange.End)
+func (c *DiscoverCmd) printTextOutput(globals *Globals, d *domain.Discovery) error {
+	if _, err := fmt.Fprintf(globals.Stdout, "=== Log Discovery ===\n\n"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "Total logs: %d\n", d.TotalCount); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "Time range: %s to %s\n\n", d.TimeRange.Start, d.TimeRange.End); err != nil {
+		return err
+	}
 
 	// Level breakdown
-	fmt.Fprintf(globals.Stdout, "Levels:\n")
+	if _, err := fmt.Fprintf(globals.Stdout, "Levels:\n"); err != nil {
+		return err
+	}
 	levelOrder := []string{"Debug", "Info", "Default", "Error", "Fault"}
 	for _, level := range levelOrder {
 		if count, ok := d.Levels[level]; ok {
-			fmt.Fprintf(globals.Stdout, "  %-10s %d\n", level+":", count)
+			if _, err := fmt.Fprintf(globals.Stdout, "  %-10s %d\n", level+":", count); err != nil {
+				return err
+			}
 		}
 	}
-	fmt.Fprintln(globals.Stdout)
+	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+		return err
+	}
 
 	// Subsystems
-	fmt.Fprintf(globals.Stdout, "Top Subsystems:\n")
+	if _, err := fmt.Fprintf(globals.Stdout, "Top Subsystems:\n"); err != nil {
+		return err
+	}
 	for _, s := range d.Subsystems {
-		fmt.Fprintf(globals.Stdout, "  %-50s %5d", s.Name, s.Count)
+		if _, err := fmt.Fprintf(globals.Stdout, "  %-50s %5d", s.Name, s.Count); err != nil {
+			return err
+		}
 		if s.Levels["Error"] > 0 || s.Levels["Fault"] > 0 {
-			fmt.Fprintf(globals.Stdout, "  (")
+			if _, err := fmt.Fprintf(globals.Stdout, "  ("); err != nil {
+				return err
+			}
 			if s.Levels["Error"] > 0 {
-				fmt.Fprintf(globals.Stdout, "%d errors", s.Levels["Error"])
+				if _, err := fmt.Fprintf(globals.Stdout, "%d errors", s.Levels["Error"]); err != nil {
+					return err
+				}
 			}
 			if s.Levels["Error"] > 0 && s.Levels["Fault"] > 0 {
-				fmt.Fprintf(globals.Stdout, ", ")
+				if _, err := fmt.Fprintf(globals.Stdout, ", "); err != nil {
+					return err
+				}
 			}
 			if s.Levels["Fault"] > 0 {
-				fmt.Fprintf(globals.Stdout, "%d faults", s.Levels["Fault"])
+				if _, err := fmt.Fprintf(globals.Stdout, "%d faults", s.Levels["Fault"]); err != nil {
+					return err
+				}
 			}
-			fmt.Fprintf(globals.Stdout, ")")
+			if _, err := fmt.Fprintf(globals.Stdout, ")"); err != nil {
+				return err
+			}
 		}
-		fmt.Fprintln(globals.Stdout)
+		if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+			return err
+		}
 	}
-	fmt.Fprintln(globals.Stdout)
+	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+		return err
+	}
 
 	// Categories
-	fmt.Fprintf(globals.Stdout, "Top Categories:\n")
-	for _, cat := range d.Categories {
-		fmt.Fprintf(globals.Stdout, "  %-50s %5d\n", cat.Name, cat.Count)
+	if _, err := fmt.Fprintf(globals.Stdout, "Top Categories:\n"); err != nil {
+		return err
 	}
-	fmt.Fprintln(globals.Stdout)
+	for _, cat := range d.Categories {
+		if _, err := fmt.Fprintf(globals.Stdout, "  %-50s %5d\n", cat.Name, cat.Count); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+		return err
+	}
 
 	// Processes
-	fmt.Fprintf(globals.Stdout, "Top Processes:\n")
-	for _, p := range d.Processes {
-		fmt.Fprintf(globals.Stdout, "  %-50s %5d\n", p.Name, p.Count)
+	if _, err := fmt.Fprintf(globals.Stdout, "Top Processes:\n"); err != nil {
+		return err
 	}
+	for _, p := range d.Processes {
+		if _, err := fmt.Fprintf(globals.Stdout, "  %-50s %5d\n", p.Name, p.Count); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func (c *DiscoverCmd) outputError(globals *Globals, code, message string) error {
-	return outputErrorCommon(globals, code, message)
+func (c *DiscoverCmd) outputError(globals *Globals, code, message string, hint ...string) error {
+	return outputErrorCommon(globals, code, message, hint...)
 }

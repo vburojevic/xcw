@@ -2,15 +2,15 @@ package domain
 
 // Discovery represents the aggregated log discovery results
 type Discovery struct {
-	Type          string              `json:"type"`
-	SchemaVersion int                 `json:"schemaVersion"`
-	App           string              `json:"app,omitempty"`
-	TimeRange     DiscoveryTimeRange  `json:"time_range"`
-	TotalCount    int                 `json:"total_count"`
-	Subsystems    []SubsystemInfo     `json:"subsystems"`
-	Categories    []CategoryInfo      `json:"categories"`
-	Processes     []ProcessInfo       `json:"processes"`
-	Levels        map[string]int      `json:"levels"`
+	Type          string             `json:"type"`
+	SchemaVersion int                `json:"schemaVersion"`
+	App           string             `json:"app,omitempty"`
+	TimeRange     DiscoveryTimeRange `json:"time_range"`
+	TotalCount    int                `json:"total_count"`
+	Subsystems    []SubsystemInfo    `json:"subsystems"`
+	Categories    []CategoryInfo     `json:"categories"`
+	Processes     []ProcessInfo      `json:"processes"`
+	Levels        map[string]int     `json:"levels"`
 }
 
 // DiscoveryTimeRange represents the time range of discovered logs

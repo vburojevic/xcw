@@ -214,8 +214,7 @@ func (c *PickCmd) runPicker(items []list.Item, title string) (pickItem, error) {
 		BorderForeground(lipgloss.Color("39")).
 		Foreground(lipgloss.Color("39")).
 		Padding(0, 0, 0, 1)
-	delegate.Styles.SelectedDesc = delegate.Styles.SelectedTitle.Copy().
-		Foreground(lipgloss.Color("241"))
+	delegate.Styles.SelectedDesc = delegate.Styles.SelectedTitle.Foreground(lipgloss.Color("241"))
 
 	// Create list
 	l := list.New(items, delegate, 0, 0)

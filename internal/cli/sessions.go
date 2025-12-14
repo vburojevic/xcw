@@ -33,14 +33,20 @@ func (c *SessionsListCmd) Run(globals *Globals) error {
 
 	if len(sessions) == 0 {
 		if globals.Format == "ndjson" {
-			output.NewNDJSONWriter(globals.Stdout).WriteInfo("No session files found", "", "", "", "")
+			if err := output.NewNDJSONWriter(globals.Stdout).WriteInfo("No session files found", "", "", "", ""); err != nil {
+				return err
+			}
 		} else {
-			fmt.Fprintln(globals.Stdout, "No session files found")
+			if _, err := fmt.Fprintln(globals.Stdout, "No session files found"); err != nil {
+				return err
+			}
 			dir := c.Dir
 			if dir == "" {
 				dir = GetDefaultSessionDir()
 			}
-			fmt.Fprintf(globals.Stdout, "Session directory: %s\n", dir)
+			if _, err := fmt.Fprintf(globals.Stdout, "Session directory: %s\n", dir); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -51,6 +57,7 @@ func (c *SessionsListCmd) Run(globals *Globals) error {
 	}
 
 	if globals.Format == "ndjson" {
+		enc := json.NewEncoder(globals.Stdout)
 		for _, s := range sessions {
 			so := SessionOutput{
 				Type:          "session",
@@ -61,24 +68,31 @@ func (c *SessionsListCmd) Run(globals *Globals) error {
 				Size:          s.Size,
 				Prefix:        s.Prefix,
 			}
-			data, _ := json.Marshal(so)
-			fmt.Fprintln(globals.Stdout, string(data))
+			if err := enc.Encode(so); err != nil {
+				return err
+			}
 		}
 	} else {
-		fmt.Fprintf(globals.Stdout, "Session files (%d):\n", len(sessions))
+		if _, err := fmt.Fprintf(globals.Stdout, "Session files (%d):\n", len(sessions)); err != nil {
+			return err
+		}
 		for i, s := range sessions {
 			sizeStr := formatSize(s.Size)
-			fmt.Fprintf(globals.Stdout, "  [%d] %s  %s  %s\n",
+			if _, err := fmt.Fprintf(globals.Stdout, "  [%d] %s  %s  %s\n",
 				i+1,
 				s.Timestamp.Format("2006-01-02 15:04:05"),
 				sizeStr,
-				s.Name)
+				s.Name); err != nil {
+				return err
+			}
 		}
 		dir := c.Dir
 		if dir == "" {
 			dir = GetDefaultSessionDir()
 		}
-		fmt.Fprintf(globals.Stdout, "\nDirectory: %s\n", dir)
+		if _, err := fmt.Fprintf(globals.Stdout, "\nDirectory: %s\n", dir); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -126,6 +140,7 @@ func (c *SessionsShowCmd) Run(globals *Globals) error {
 	}
 
 	if globals.Format == "ndjson" {
+		enc := json.NewEncoder(globals.Stdout)
 		so := SessionOutput{
 			Type:          "session",
 			SchemaVersion: output.SchemaVersion,
@@ -135,11 +150,14 @@ func (c *SessionsShowCmd) Run(globals *Globals) error {
 			Size:          session.Size,
 			Prefix:        session.Prefix,
 		}
-		data, _ := json.Marshal(so)
-		fmt.Fprintln(globals.Stdout, string(data))
+		if err := enc.Encode(so); err != nil {
+			return err
+		}
 	} else {
 		// Just output the path for easy piping
-		fmt.Fprintln(globals.Stdout, session.Path)
+		if _, err := fmt.Fprintln(globals.Stdout, session.Path); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -167,11 +185,15 @@ func (c *SessionsCleanCmd) Run(globals *Globals) error {
 
 		if len(sessions) <= c.Keep {
 			if globals.Format == "ndjson" {
-				output.NewNDJSONWriter(globals.Stdout).WriteInfo(
+				if err := output.NewNDJSONWriter(globals.Stdout).WriteInfo(
 					fmt.Sprintf("Nothing to clean (have %d, keeping %d)", len(sessions), c.Keep),
-					"", "", "", "")
+					"", "", "", ""); err != nil {
+					return err
+				}
 			} else {
-				fmt.Fprintf(globals.Stdout, "Nothing to clean (have %d sessions, keeping %d)\n", len(sessions), c.Keep)
+				if _, err := fmt.Fprintf(globals.Stdout, "Nothing to clean (have %d sessions, keeping %d)\n", len(sessions), c.Keep); err != nil {
+					return err
+				}
 			}
 			return nil
 		}
@@ -179,14 +201,20 @@ func (c *SessionsCleanCmd) Run(globals *Globals) error {
 		toDelete := sessions[c.Keep:]
 		if globals.Format == "ndjson" {
 			for _, s := range toDelete {
-				output.NewNDJSONWriter(globals.Stdout).WriteInfo(
+				if err := output.NewNDJSONWriter(globals.Stdout).WriteInfo(
 					fmt.Sprintf("Would delete: %s", s.Name),
-					"", "", "", "")
+					"", "", "", ""); err != nil {
+					return err
+				}
 			}
 		} else {
-			fmt.Fprintf(globals.Stdout, "Would delete %d session(s):\n", len(toDelete))
+			if _, err := fmt.Fprintf(globals.Stdout, "Would delete %d session(s):\n", len(toDelete)); err != nil {
+				return err
+			}
 			for _, s := range toDelete {
-				fmt.Fprintf(globals.Stdout, "  %s\n", s.Name)
+				if _, err := fmt.Fprintf(globals.Stdout, "  %s\n", s.Name); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -200,19 +228,29 @@ func (c *SessionsCleanCmd) Run(globals *Globals) error {
 
 	if len(deleted) == 0 {
 		if globals.Format == "ndjson" {
-			output.NewNDJSONWriter(globals.Stdout).WriteInfo("No sessions to clean", "", "", "", "")
+			if err := output.NewNDJSONWriter(globals.Stdout).WriteInfo("No sessions to clean", "", "", "", ""); err != nil {
+				return err
+			}
 		} else {
-			fmt.Fprintln(globals.Stdout, "No sessions to clean")
+			if _, err := fmt.Fprintln(globals.Stdout, "No sessions to clean"); err != nil {
+				return err
+			}
 		}
 	} else {
 		if globals.Format == "ndjson" {
-			output.NewNDJSONWriter(globals.Stdout).WriteInfo(
+			if err := output.NewNDJSONWriter(globals.Stdout).WriteInfo(
 				fmt.Sprintf("Deleted %d session(s)", len(deleted)),
-				"", "", "", "")
+				"", "", "", ""); err != nil {
+				return err
+			}
 		} else {
-			fmt.Fprintf(globals.Stdout, "Deleted %d session(s):\n", len(deleted))
+			if _, err := fmt.Fprintf(globals.Stdout, "Deleted %d session(s):\n", len(deleted)); err != nil {
+				return err
+			}
 			for _, p := range deleted {
-				fmt.Fprintf(globals.Stdout, "  %s\n", filepath.Base(p))
+				if _, err := fmt.Fprintf(globals.Stdout, "  %s\n", filepath.Base(p)); err != nil {
+					return err
+				}
 			}
 		}
 	}

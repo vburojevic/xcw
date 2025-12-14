@@ -8,22 +8,16 @@ import (
 
 // emitWarning respects format/quiet.
 func emitWarning(globals *Globals, emitter *output.Emitter, msg string) {
-	if globals.Quiet {
+	if globals == nil || globals.Quiet {
 		return
 	}
 	if globals.Format == "ndjson" && emitter != nil {
-		emitter.WriteWarning(msg)
+		if err := emitter.WriteWarning(msg); err != nil {
+			globals.Debug("failed to emit warning: %v", err)
+		}
 		return
 	}
-	fmt.Fprintf(globals.Stderr, "Warning: %s\n", msg)
-}
-
-// emitError respects format/quiet but always returns an error.
-func emitError(globals *Globals, emitter *output.Emitter, code, msg string) error {
-	if globals.Format == "ndjson" && emitter != nil {
-		emitter.Error(code, msg)
-		return fmt.Errorf("%s", msg)
+	if _, err := fmt.Fprintf(globals.Stderr, "Warning: %s\n", msg); err != nil {
+		globals.Debug("failed to write warning: %v", err)
 	}
-	fmt.Fprintf(globals.Stderr, "Error [%s]: %s\n", code, msg)
-	return fmt.Errorf("%s", msg)
 }

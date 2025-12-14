@@ -40,7 +40,11 @@ func (c *ReplayCmd) Run(globals *Globals) error {
 	if err != nil {
 		return c.outputError(globals, "FILE_NOT_FOUND", fmt.Sprintf("cannot open file: %s", err))
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			globals.Debug("Failed to close file: %v", err)
+		}
+	}()
 
 	// Create output writer
 	var writer interface {
@@ -55,15 +59,23 @@ func (c *ReplayCmd) Run(globals *Globals) error {
 
 	if !globals.Quiet {
 		if globals.Format == "ndjson" {
-			output.NewNDJSONWriter(globals.Stdout).WriteInfo(
+			if err := output.NewNDJSONWriter(globals.Stdout).WriteInfo(
 				fmt.Sprintf("Replaying logs from %s", c.File),
-				"", "", "", "replay")
-		} else {
-			fmt.Fprintf(globals.Stderr, "Replaying logs from %s\n", c.File)
-			if c.Realtime {
-				fmt.Fprintf(globals.Stderr, "Speed: %.1fx\n", c.Speed)
+				"", "", "", "replay"); err != nil {
+				return err
 			}
-			fmt.Fprintln(globals.Stderr, "Press Ctrl+C to stop")
+		} else {
+			if _, err := fmt.Fprintf(globals.Stderr, "Replaying logs from %s\n", c.File); err != nil {
+				return err
+			}
+			if c.Realtime {
+				if _, err := fmt.Fprintf(globals.Stderr, "Speed: %.1fx\n", c.Speed); err != nil {
+					return err
+				}
+			}
+			if _, err := fmt.Fprintln(globals.Stderr, "Press Ctrl+C to stop"); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -102,8 +114,12 @@ func (c *ReplayCmd) Run(globals *Globals) error {
 			}
 			if json.Unmarshal(line, &typeCheck) == nil && typeCheck.Type != "" {
 				// Replay non-log entries too
-				globals.Stdout.Write(line)
-				globals.Stdout.Write([]byte("\n"))
+				if _, err := globals.Stdout.Write(line); err != nil {
+					return err
+				}
+				if _, err := globals.Stdout.Write([]byte("\n")); err != nil {
+					return err
+				}
 				continue
 			}
 			globals.Debug("Skipping unparseable line: %v", err)
@@ -144,7 +160,9 @@ func (c *ReplayCmd) Run(globals *Globals) error {
 	}
 
 	if !globals.Quiet && globals.Format != "ndjson" {
-		fmt.Fprintf(globals.Stderr, "\nReplayed %d entries\n", entryCount)
+		if _, err := fmt.Fprintf(globals.Stderr, "\nReplayed %d entries\n", entryCount); err != nil {
+			return err
+		}
 	}
 
 	return nil

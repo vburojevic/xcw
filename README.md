@@ -121,7 +121,9 @@ xcw examples --json
 
 ## Streaming logs in real-time
 
-The `tail` subcommand streams logs from the iOS Simulator.  It automatically picks the single booted simulator when no simulator is specified.  You must always provide an app bundle identifier via `-a`/`--app`.
+The `tail` subcommand streams logs from the iOS Simulator. It automatically picks the single booted simulator when no simulator is specified.
+
+By default, provide an app bundle identifier via `-a`/`--app`. For advanced use cases you can omit `--app` when supplying a raw `--predicate`, or use `--all` to explicitly stream unfiltered simulator logs (can be very noisy).
 
 ```sh
 # tail logs from the booted simulator
@@ -168,6 +170,12 @@ xcw tail -a com.example.myapp --where "subsystem^com.example"
 # combine multiple where clauses (AND logic)
 xcw tail -a com.example.myapp --where level>=error --where "message~network"
 
+# boolean where expressions (OR/AND/NOT + parentheses)
+xcw tail -a com.example.myapp --where '(level=error OR level=fault) AND message~timeout'
+
+# regex literal with flags (case-insensitive)
+xcw tail -a com.example.myapp --where 'message~/timeout|crash/i'
+
 # filter by process name
 xcw tail -a com.example.myapp --process MyApp --process MyAppExtension
 
@@ -189,7 +197,7 @@ xcw tail -a com.example.myapp --dedupe --dedupe-window 5s
 | `^` | Starts with | `subsystem^com.example` |
 | `$` | Ends with | `message$failed` |
 
-**Supported fields:** `level`, `subsystem`, `category`, `process`, `message`, `pid`
+**Supported fields:** `level`, `subsystem`, `category`, `process`, `message`, `pid`, `tid`
 
 ## Discovering log sources
 

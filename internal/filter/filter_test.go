@@ -408,44 +408,44 @@ func TestWhereClauseMatch(t *testing.T) {
 		assert.False(t, wc.Match(entry2))
 	})
 
-		t.Run("ends with", func(t *testing.T) {
-			wc, _ := ParseWhereClause("message$failed")
-			entry := &domain.LogEntry{Message: "Connection failed"}
-			assert.True(t, wc.Match(entry))
+	t.Run("ends with", func(t *testing.T) {
+		wc, _ := ParseWhereClause("message$failed")
+		entry := &domain.LogEntry{Message: "Connection failed"}
+		assert.True(t, wc.Match(entry))
 
-			entry2 := &domain.LogEntry{Message: "Success"}
-			assert.False(t, wc.Match(entry2))
-		})
+		entry2 := &domain.LogEntry{Message: "Success"}
+		assert.False(t, wc.Match(entry2))
+	})
 
-		t.Run("numeric pid comparisons", func(t *testing.T) {
-			wc, _ := ParseWhereClause("pid>=100")
-			entry := &domain.LogEntry{PID: 120}
-			assert.True(t, wc.Match(entry))
-			entry2 := &domain.LogEntry{PID: 80}
-			assert.False(t, wc.Match(entry2))
+	t.Run("numeric pid comparisons", func(t *testing.T) {
+		wc, _ := ParseWhereClause("pid>=100")
+		entry := &domain.LogEntry{PID: 120}
+		assert.True(t, wc.Match(entry))
+		entry2 := &domain.LogEntry{PID: 80}
+		assert.False(t, wc.Match(entry2))
 
-			wcEq, _ := ParseWhereClause("pid=120")
-			assert.True(t, wcEq.Match(entry))
-			assert.False(t, wcEq.Match(entry2))
-		})
+		wcEq, _ := ParseWhereClause("pid=120")
+		assert.True(t, wcEq.Match(entry))
+		assert.False(t, wcEq.Match(entry2))
+	})
 
-		t.Run("numeric tid comparisons", func(t *testing.T) {
-			wc, _ := ParseWhereClause("tid<=5")
-			entry := &domain.LogEntry{TID: 3}
-			assert.True(t, wc.Match(entry))
-			entry2 := &domain.LogEntry{TID: 7}
-			assert.False(t, wc.Match(entry2))
-		})
+	t.Run("numeric tid comparisons", func(t *testing.T) {
+		wc, _ := ParseWhereClause("tid<=5")
+		entry := &domain.LogEntry{TID: 3}
+		assert.True(t, wc.Match(entry))
+		entry2 := &domain.LogEntry{TID: 7}
+		assert.False(t, wc.Match(entry2))
+	})
 
-		t.Run("quoted where values", func(t *testing.T) {
-			wc, err := ParseWhereClause(`message~"foo=bar"`)
-			require.NoError(t, err)
-			entry := &domain.LogEntry{Message: "foo=bar baz"}
-			assert.True(t, wc.Match(entry))
-		})
+	t.Run("quoted where values", func(t *testing.T) {
+		wc, err := ParseWhereClause(`message~"foo=bar"`)
+		require.NoError(t, err)
+		entry := &domain.LogEntry{Message: "foo=bar baz"}
+		assert.True(t, wc.Match(entry))
+	})
 
-		t.Run("greater or equal level", func(t *testing.T) {
-			wc, _ := ParseWhereClause("level>=error")
+	t.Run("greater or equal level", func(t *testing.T) {
+		wc, _ := ParseWhereClause("level>=error")
 
 		assert.True(t, wc.Match(&domain.LogEntry{Level: domain.LogLevelError}))
 		assert.True(t, wc.Match(&domain.LogEntry{Level: domain.LogLevelFault}))
@@ -510,8 +510,62 @@ func TestWhereFilter(t *testing.T) {
 		assert.False(t, f.Match(entry3))
 	})
 
+	t.Run("OR logic inside expression", func(t *testing.T) {
+		f, err := NewWhereFilter([]string{"level=Error OR level=Fault"})
+		require.NoError(t, err)
+
+		assert.True(t, f.Match(&domain.LogEntry{Level: domain.LogLevelError}))
+		assert.True(t, f.Match(&domain.LogEntry{Level: domain.LogLevelFault}))
+		assert.False(t, f.Match(&domain.LogEntry{Level: domain.LogLevelInfo}))
+	})
+
+	t.Run("parentheses and precedence (AND before OR)", func(t *testing.T) {
+		f, err := NewWhereFilter([]string{"level=Error OR level=Debug AND message~timeout"})
+		require.NoError(t, err)
+
+		// Matches left side of OR
+		assert.True(t, f.Match(&domain.LogEntry{Level: domain.LogLevelError, Message: "Success"}))
+
+		// Matches right side (Debug AND timeout)
+		assert.True(t, f.Match(&domain.LogEntry{Level: domain.LogLevelDebug, Message: "Connection timeout"}))
+
+		// Debug without timeout should not match
+		assert.False(t, f.Match(&domain.LogEntry{Level: domain.LogLevelDebug, Message: "Success"}))
+	})
+
+	t.Run("NOT operator", func(t *testing.T) {
+		f, err := NewWhereFilter([]string{"NOT level=Debug"})
+		require.NoError(t, err)
+
+		assert.True(t, f.Match(&domain.LogEntry{Level: domain.LogLevelError}))
+		assert.False(t, f.Match(&domain.LogEntry{Level: domain.LogLevelDebug}))
+	})
+
+	t.Run("regex literal value with flags", func(t *testing.T) {
+		f, err := NewWhereFilter([]string{`message~/timeout|crash/i`})
+		require.NoError(t, err)
+
+		assert.True(t, f.Match(&domain.LogEntry{Message: "CRASH detected"}))
+		assert.True(t, f.Match(&domain.LogEntry{Message: "connection timeout"}))
+		assert.False(t, f.Match(&domain.LogEntry{Message: "all good"}))
+	})
+
+	t.Run("multiple expressions still AND together", func(t *testing.T) {
+		f, err := NewWhereFilter([]string{"level=Error OR level=Fault", "message~timeout"})
+		require.NoError(t, err)
+
+		assert.True(t, f.Match(&domain.LogEntry{Level: domain.LogLevelError, Message: "timeout"}))
+		assert.False(t, f.Match(&domain.LogEntry{Level: domain.LogLevelError, Message: "other"}))
+		assert.False(t, f.Match(&domain.LogEntry{Level: domain.LogLevelInfo, Message: "timeout"}))
+	})
+
 	t.Run("invalid clause returns error", func(t *testing.T) {
 		_, err := NewWhereFilter([]string{"invalid"})
+		assert.Error(t, err)
+	})
+
+	t.Run("invalid expression returns error", func(t *testing.T) {
+		_, err := NewWhereFilter([]string{"level=Error OR"})
 		assert.Error(t, err)
 	})
 }

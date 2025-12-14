@@ -190,7 +190,7 @@ func (wc *WhereClause) compareNumeric(entry *domain.LogEntry, greaterOrEqual boo
 
 // WhereFilter is a filter that applies multiple where clauses (AND logic)
 type WhereFilter struct {
-	clauses []*WhereClause
+	expr whereExpr
 }
 
 // NewWhereFilter creates a filter from multiple where clause strings
@@ -201,11 +201,15 @@ func NewWhereFilter(whereClauses []string) (*WhereFilter, error) {
 
 	filter := &WhereFilter{}
 	for _, clause := range whereClauses {
-		wc, err := ParseWhereClause(clause)
+		expr, err := parseWhereExpr(clause)
 		if err != nil {
 			return nil, err
 		}
-		filter.clauses = append(filter.clauses, wc)
+		if filter.expr == nil {
+			filter.expr = expr
+		} else {
+			filter.expr = &whereAndExpr{left: filter.expr, right: expr}
+		}
 	}
 
 	return filter, nil
@@ -213,10 +217,8 @@ func NewWhereFilter(whereClauses []string) (*WhereFilter, error) {
 
 // Match returns true if the entry matches ALL where clauses (AND logic)
 func (f *WhereFilter) Match(entry *domain.LogEntry) bool {
-	for _, clause := range f.clauses {
-		if !clause.Match(entry) {
-			return false
-		}
+	if f == nil || f.expr == nil {
+		return true
 	}
-	return true
+	return f.expr.Match(entry)
 }

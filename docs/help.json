@@ -1,6 +1,6 @@
 {
   "type": "documentation",
-  "version": "0.15.1",
+  "version": "0.17.0",
   "purpose": "iOS Simulator log streaming CLI optimized for AI agents. Outputs structured NDJSON for real-time and historical log access.",
   "primary_command": "tail",
   "agent_guidance": "ALWAYS START WITH: xcw tail -s \u003csimulator\u003e -a \u003cbundle_id\u003e. This is THE primary command for monitoring iOS app logs. Run 'xcw list' to get simulator names, and 'xcw apps' to get bundle IDs. Only use other commands (query, watch, analyze) for specific use cases AFTER you've tried tail. The 'query' command reads from macOS system logs and is only useful when you forgot to start tail. Tmux (--tmux) is for human visual monitoring; AI agents should use stdout or --output instead.",
@@ -8,6 +8,7 @@
     "analyze_session": "xcw analyze $(xcw sessions show --latest)",
     "check_setup": "xcw doctor",
     "discover_log_sources": "xcw discover -s \"iPhone 17 Pro\" -a com.example.myapp --since 5m",
+    "filter_by_expr": "xcw tail -s \"iPhone 17 Pro\" -a com.example.myapp --where '(level=error OR level=fault) AND message~timeout'",
     "filter_by_field": "xcw tail -s \"iPhone 17 Pro\" -a com.example.myapp --where level=error",
     "list_apps": "xcw apps -s \"iPhone 17 Pro\"",
     "list_simulators": "xcw list",
@@ -156,8 +157,8 @@
       ]
     },
     "query": {
-      "description": "Query historical logs from iOS Simulator",
-      "usage": "xcw query -s SIMULATOR -a APP --since DURATION [flags]",
+      "description": "Query historical logs from iOS Simulator (use -a unless --predicate/--all)",
+      "usage": "xcw query -s SIMULATOR [-a APP] --since DURATION [flags]",
       "examples": [
         {
           "command": "xcw query -s \"iPhone 17 Pro\" -a com.example.myapp --since 5m",
@@ -170,6 +171,10 @@
         {
           "command": "xcw query -s \"iPhone 17 Pro\" -a com.example.myapp --since 10m --analyze",
           "description": "With pattern analysis"
+        },
+        {
+          "command": "xcw query -s \"iPhone 17 Pro\" -a com.example.myapp --since 10m --where '(level=error OR level=fault) AND message~timeout'",
+          "description": "Where expression"
         }
       ],
       "output_types": [
@@ -242,8 +247,8 @@
       ]
     },
     "tail": {
-      "description": "Stream real-time logs from iOS Simulator",
-      "usage": "xcw tail -s SIMULATOR -a APP [flags]",
+      "description": "Stream real-time logs from iOS Simulator (use -a unless --predicate/--all)",
+      "usage": "xcw tail -s SIMULATOR [-a APP] [flags]",
       "examples": [
         {
           "command": "xcw tail -s \"iPhone 17 Pro\" -a com.example.myapp",
@@ -271,7 +276,11 @@
         },
         {
           "command": "xcw tail -s \"iPhone 17 Pro\" -a com.example.myapp --where level=error",
-          "description": "Filter by field (supports =, !=, ~, !~, \u003e=, \u003c=, ^, $)"
+          "description": "Filter by field/expression (=, !=, ~, !~, \u003e=, \u003c=, ^, $, AND/OR/NOT, parentheses, /regex/i)"
+        },
+        {
+          "command": "xcw tail -s \"iPhone 17 Pro\" -a com.example.myapp --where '(level=error OR level=fault) AND message~timeout'",
+          "description": "Boolean where expression"
         },
         {
           "command": "xcw tail -s \"iPhone 17 Pro\" -a com.example.myapp --where \"message~timeout\"",
@@ -292,6 +301,10 @@
         {
           "command": "xcw tail -s \"iPhone 17 Pro\" -a com.example.myapp --session-idle 60s",
           "description": "Force a new session boundary after 60s of inactivity"
+        },
+        {
+          "command": "xcw tail -s \"iPhone 17 Pro\" --predicate 'process == \\\"MyApp\\\"'",
+          "description": "Stream without -a using a raw predicate (advanced)"
         }
       ],
       "output_types": [
@@ -613,9 +626,17 @@
       "description": "Input file not found",
       "recovery": "Check file path exists"
     },
+    "FILTER_REQUIRED": {
+      "description": "No source filter provided (refusing to run unfiltered by default)",
+      "recovery": "Provide -a/--app or --predicate, or pass --all to intentionally stream/query all logs"
+    },
     "INVALID_DURATION": {
       "description": "Duration parsing failed",
       "recovery": "Use format like '5m', '1h', '30s'"
+    },
+    "INVALID_FILTER": {
+      "description": "Filter parsing/compilation failed",
+      "recovery": "Check regex/--where syntax; quote complex expressions"
     },
     "INVALID_FLAGS": {
       "description": "--simulator and --booted used together",
@@ -648,6 +669,10 @@
     "TMUX_NOT_INSTALLED": {
       "description": "tmux not installed",
       "recovery": "Install with 'brew install tmux'"
+    },
+    "TUI_FAILED": {
+      "description": "TUI exited with an error",
+      "recovery": "Rerun with -v for debug output or use 'xcw tail' for non-interactive streaming"
     }
   },
   "workflows": [

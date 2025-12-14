@@ -6,10 +6,10 @@ import "time"
 type DeviceState string
 
 const (
-	DeviceStateShutdown  DeviceState = "Shutdown"
-	DeviceStateBooted    DeviceState = "Booted"
-	DeviceStateBooting   DeviceState = "Booting"
-	DeviceStateCreating  DeviceState = "Creating"
+	DeviceStateShutdown     DeviceState = "Shutdown"
+	DeviceStateBooted       DeviceState = "Booted"
+	DeviceStateBooting      DeviceState = "Booting"
+	DeviceStateCreating     DeviceState = "Creating"
 	DeviceStateShuttingDown DeviceState = "Shutting Down"
 )
 

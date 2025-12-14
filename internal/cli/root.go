@@ -5,8 +5,8 @@ import (
 	"io"
 	"os"
 
-	"go.uber.org/zap"
 	"github.com/vburojevic/xcw/internal/config"
+	"go.uber.org/zap"
 )
 
 // CLI is the root command structure for XcodeConsoleWatcher
@@ -127,7 +127,9 @@ func (g *Globals) Debug(format string, args ...interface{}) {
 		g.Logger.Debugf(format, args...)
 		return
 	}
-	fmt.Fprintf(g.Stderr, "[DEBUG] "+format+"\n", args...)
+	if _, err := fmt.Fprintf(g.Stderr, "[DEBUG] "+format+"\n", args...); err != nil {
+		return
+	}
 }
 
 func newZapLogger() *zap.SugaredLogger {
@@ -144,15 +146,15 @@ type VersionCmd struct{}
 // Run executes the version command
 func (v *VersionCmd) Run(globals *Globals) error {
 	if globals.Format == "ndjson" {
-		io.WriteString(globals.Stdout, `{"type":"version","version":"`+Version+`","commit":"`+Commit+`"}`+"\n")
-	} else {
-		io.WriteString(globals.Stdout, "xcw version "+Version+" ("+Commit+")\n")
+		_, err := io.WriteString(globals.Stdout, `{"type":"version","version":"`+Version+`","commit":"`+Commit+`"}`+"\n")
+		return err
 	}
-	return nil
+	_, err := io.WriteString(globals.Stdout, "xcw version "+Version+" ("+Commit+")\n")
+	return err
 }
 
 // Version information (set at build time)
 var (
-	Version = "0.15.1"
+	Version = "0.17.0"
 	Commit  = "none"
 )

@@ -150,10 +150,14 @@ func (c *LaunchCmd) outputInfo(globals *Globals, device *domain.Device) {
 			Simulator:     device.Name,
 			UDID:          device.UDID,
 		}
-		data, _ := json.Marshal(info)
-		fmt.Fprintln(globals.Stdout, string(data))
+		enc := json.NewEncoder(globals.Stdout)
+		if err := enc.Encode(info); err != nil {
+			globals.Debug("failed to write launch info: %v", err)
+		}
 	} else {
-		fmt.Fprintf(globals.Stdout, "Launching %s on %s...\n", c.App, device.Name)
+		if _, err := fmt.Fprintf(globals.Stdout, "Launching %s on %s...\n", c.App, device.Name); err != nil {
+			globals.Debug("failed to write launch info: %v", err)
+		}
 	}
 }
 
@@ -167,14 +171,18 @@ func (c *LaunchCmd) outputConsoleLine(globals *Globals, stream, message, process
 			Message:       message,
 			Process:       process,
 		}
-		data, _ := json.Marshal(out)
-		fmt.Fprintln(globals.Stdout, string(data))
+		enc := json.NewEncoder(globals.Stdout)
+		if err := enc.Encode(out); err != nil {
+			globals.Debug("failed to write console output: %v", err)
+		}
 	} else {
 		prefix := ""
 		if stream == "stderr" {
 			prefix = "[stderr] "
 		}
-		fmt.Fprintf(globals.Stdout, "%s%s\n", prefix, message)
+		if _, err := fmt.Fprintf(globals.Stdout, "%s%s\n", prefix, message); err != nil {
+			globals.Debug("failed to write console output: %v", err)
+		}
 	}
 }
 

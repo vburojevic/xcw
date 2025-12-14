@@ -13,4 +13,3 @@ func BenchmarkParserParse(b *testing.B) {
 		}
 	}
 }
-

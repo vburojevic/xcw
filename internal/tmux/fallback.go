@@ -15,9 +15,10 @@ const (
 
 // OutputManager provides fallback output handling
 type OutputManager struct {
-	mode    OutputMode
-	tmux    *Manager
-	writer  io.Writer
+	mode     OutputMode
+	tmux     *Manager
+	writer   io.Writer
+	flushErr error
 }
 
 // NewOutputManager creates an output manager with appropriate fallback
@@ -94,7 +95,9 @@ func (om *OutputManager) Cleanup() {
 	if om.tmux != nil {
 		// Flush any remaining output
 		if w, ok := om.writer.(*Writer); ok {
-			w.Flush()
+			if err := w.Flush(); err != nil {
+				om.flushErr = err
+			}
 		}
 		// Clean up (session persists)
 		om.tmux.Cleanup()

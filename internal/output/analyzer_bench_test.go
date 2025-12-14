@@ -34,4 +34,3 @@ func BenchmarkSummarize(b *testing.B) {
 		_ = a.Summarize(entries)
 	}
 }
-

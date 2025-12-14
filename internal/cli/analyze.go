@@ -25,7 +25,11 @@ func (c *AnalyzeCmd) Run(globals *Globals) error {
 	if err != nil {
 		return c.outputError(globals, "FILE_NOT_FOUND", fmt.Sprintf("cannot open file: %s", err))
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			globals.Debug("Failed to close file: %v", err)
+		}
+	}()
 
 	// Read and parse log entries
 	var entries []domain.LogEntry
@@ -94,37 +98,67 @@ func (c *AnalyzeCmd) Run(globals *Globals) error {
 	}
 
 	// Text output
-	fmt.Fprintf(globals.Stdout, "Analysis of %s\n", c.File)
-	fmt.Fprintln(globals.Stdout, "===================")
-	fmt.Fprintln(globals.Stdout)
+	if _, err := fmt.Fprintf(globals.Stdout, "Analysis of %s\n", c.File); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout, "==================="); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+		return err
+	}
 
 	// Time range
 	if !summary.WindowStart.IsZero() && !summary.WindowEnd.IsZero() {
 		duration := summary.WindowEnd.Sub(summary.WindowStart)
-		fmt.Fprintf(globals.Stdout, "Time Range: %s to %s (%s)\n",
+		if _, err := fmt.Fprintf(globals.Stdout, "Time Range: %s to %s (%s)\n",
 			summary.WindowStart.Format(time.RFC3339),
 			summary.WindowEnd.Format(time.RFC3339),
-			duration.Round(time.Second))
-		fmt.Fprintln(globals.Stdout)
+			duration.Round(time.Second)); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+			return err
+		}
 	}
 
 	// Counts
-	fmt.Fprintf(globals.Stdout, "Total entries:   %d\n", summary.TotalCount)
-	fmt.Fprintf(globals.Stdout, "  Debug:         %d\n", summary.DebugCount)
-	fmt.Fprintf(globals.Stdout, "  Info:          %d\n", summary.InfoCount)
-	fmt.Fprintf(globals.Stdout, "  Default:       %d\n", summary.DefaultCount)
-	fmt.Fprintf(globals.Stdout, "  Error:         %d\n", summary.ErrorCount)
-	fmt.Fprintf(globals.Stdout, "  Fault:         %d\n", summary.FaultCount)
-	fmt.Fprintln(globals.Stdout)
+	if _, err := fmt.Fprintf(globals.Stdout, "Total entries:   %d\n", summary.TotalCount); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  Debug:         %d\n", summary.DebugCount); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  Info:          %d\n", summary.InfoCount); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  Default:       %d\n", summary.DefaultCount); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  Error:         %d\n", summary.ErrorCount); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  Fault:         %d\n", summary.FaultCount); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+		return err
+	}
 
 	if summary.ErrorRate > 0 {
-		fmt.Fprintf(globals.Stdout, "Error rate: %.2f/min\n", summary.ErrorRate)
-		fmt.Fprintln(globals.Stdout)
+		if _, err := fmt.Fprintf(globals.Stdout, "Error rate: %.2f/min\n", summary.ErrorRate); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+			return err
+		}
 	}
 
 	// Patterns
 	if len(patterns) > 0 {
-		fmt.Fprintln(globals.Stdout, "Error Patterns:")
+		if _, err := fmt.Fprintln(globals.Stdout, "Error Patterns:"); err != nil {
+			return err
+		}
 		if c.PersistPatterns {
 			store := output.NewPatternStore(c.PatternFile)
 			enhanced := store.RecordPatterns(patterns)
@@ -136,11 +170,15 @@ func (c *AnalyzeCmd) Run(globals *Globals) error {
 				if !p.IsNew {
 					status = "[KNOWN]"
 				}
-				fmt.Fprintf(globals.Stdout, "  %s (%dx) %s\n", status, p.Count, p.Pattern)
+				if _, err := fmt.Fprintf(globals.Stdout, "  %s (%dx) %s\n", status, p.Count, p.Pattern); err != nil {
+					return err
+				}
 			}
 		} else {
 			for _, p := range patterns {
-				fmt.Fprintf(globals.Stdout, "  (%dx) %s\n", p.Count, p.Pattern)
+				if _, err := fmt.Fprintf(globals.Stdout, "  (%dx) %s\n", p.Count, p.Pattern); err != nil {
+					return err
+				}
 			}
 		}
 	}

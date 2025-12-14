@@ -15,7 +15,8 @@ import (
 type QueryCmd struct {
 	Simulator        string   `short:"s" help:"Simulator name or UDID"`
 	Booted           bool     `short:"b" help:"Use booted simulator (error if multiple)"`
-	App              string   `short:"a" required:"" help:"App bundle identifier to filter logs"`
+	App              string   `short:"a" help:"App bundle identifier to filter logs (required unless --predicate or --all)"`
+	All              bool     `help:"Allow querying without --app/--predicate (can be very noisy)"`
 	Since            string   `default:"5m" help:"How far back to query (e.g., '5m', '1h', '30s')"`
 	Until            string   `help:"End time for query (RFC3339 or relative like '1m')"`
 	Pattern          string   `short:"p" aliases:"filter" help:"Regex pattern to filter log messages"`
@@ -31,7 +32,7 @@ type QueryCmd struct {
 	Analyze          bool     `help:"Include AI-friendly analysis summary"`
 	PersistPatterns  bool     `help:"Save detected patterns for future reference (marks new vs known)"`
 	PatternFile      string   `help:"Custom pattern file path (default: ~/.xcw/patterns.json)"`
-	Where            []string `short:"w" help:"Field filter (e.g., 'level=error', 'message~timeout'). Operators: =, !=, ~, !~, >=, <=, ^, $"`
+	Where            []string `short:"w" help:"Field filter expression (supports AND/OR/NOT, parentheses). Operators: =, !=, ~, !~, >=, <=, ^, $. Regex literals: /pattern/i"`
 }
 
 // Run executes the query command
@@ -43,6 +44,9 @@ func (c *QueryCmd) Run(globals *Globals) error {
 	// Validate mutual exclusivity of flags
 	if c.Simulator != "" && c.Booted {
 		return c.outputError(globals, "INVALID_FLAGS", "--simulator and --booted are mutually exclusive")
+	}
+	if err := validateAppPredicateAll(c.App, c.Predicate, c.All, len(c.Subsystem) > 0 || len(c.Category) > 0); err != nil {
+		return outputErrorCommon(globals, err.Code, err.Message, err.Hint)
 	}
 
 	// Find the simulator
@@ -58,7 +62,7 @@ func (c *QueryCmd) Run(globals *Globals) error {
 		device, err = mgr.FindBootedDevice(ctx)
 	}
 	if err != nil {
-		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error())
+		return c.outputError(globals, "DEVICE_NOT_FOUND", err.Error(), hintForStreamOrQuery(err))
 	}
 	globals.Debug("Found device: %s (UDID: %s)", device.Name, device.UDID)
 
@@ -80,20 +84,28 @@ func (c *QueryCmd) Run(globals *Globals) error {
 	// Compile filters (pattern, exclude, where)
 	pattern, excludePatterns, _, err := buildFilters(c.Pattern, c.Exclude, c.Where)
 	if err != nil {
-		return c.outputError(globals, "INVALID_FILTER", err.Error())
+		return c.outputError(globals, "INVALID_FILTER", err.Error(), hintForFilter(err))
 	}
 	pipeline, _ := buildPipeline(c.Pattern, c.Exclude, c.Where)
 
 	// Output query info if not quiet
 	if !globals.Quiet {
 		if globals.Format == "ndjson" {
-			output.NewNDJSONWriter(globals.Stdout).WriteInfo(
+			if err := output.NewNDJSONWriter(globals.Stdout).WriteInfo(
 				fmt.Sprintf("Querying logs from %s", device.Name),
-				device.Name, device.UDID, c.Since, "")
+				device.Name, device.UDID, c.Since, ""); err != nil {
+				return err
+			}
 		} else {
-			fmt.Fprintf(globals.Stderr, "Querying logs from %s (%s)\n", device.Name, device.UDID)
-			fmt.Fprintf(globals.Stderr, "Time range: last %s\n", c.Since)
-			fmt.Fprintf(globals.Stderr, "Filtering by app: %s\n\n", c.App)
+			if _, err := fmt.Fprintf(globals.Stderr, "Querying logs from %s (%s)\n", device.Name, device.UDID); err != nil {
+				globals.Debug("failed to write query info: %v", err)
+			}
+			if _, err := fmt.Fprintf(globals.Stderr, "Time range: last %s\n", c.Since); err != nil {
+				globals.Debug("failed to write query info: %v", err)
+			}
+			if _, err := fmt.Fprintf(globals.Stderr, "Filtering by app: %s\n\n", c.App); err != nil {
+				globals.Debug("failed to write query info: %v", err)
+			}
 		}
 	}
 
@@ -123,7 +135,7 @@ func (c *QueryCmd) Run(globals *Globals) error {
 	globals.Debug("Executing query...")
 	entries, err := reader.Query(ctx, device.UDID, opts)
 	if err != nil {
-		return c.outputError(globals, "QUERY_FAILED", err.Error())
+		return c.outputError(globals, "QUERY_FAILED", err.Error(), hintForStreamOrQuery(err))
 	}
 	globals.Debug("Query returned %d entries", len(entries))
 
@@ -186,14 +198,20 @@ func (c *QueryCmd) Run(globals *Globals) error {
 		}
 
 		// Output summary
-		fmt.Fprintf(globals.Stdout, "\n--- Query Results ---\n")
-		fmt.Fprintf(globals.Stdout, "Total: %d entries\n", len(entries))
+		if _, err := fmt.Fprintf(globals.Stdout, "\n--- Query Results ---\n"); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(globals.Stdout, "Total: %d entries\n", len(entries)); err != nil {
+			return err
+		}
 
 		if c.Analyze {
 			analyzer := output.NewAnalyzer()
 			summary := analyzer.Summarize(entries)
 			patterns := analyzer.DetectPatterns(entries)
-			fmt.Fprintf(globals.Stdout, "Errors: %d, Faults: %d\n", summary.ErrorCount, summary.FaultCount)
+			if _, err := fmt.Fprintf(globals.Stdout, "Errors: %d, Faults: %d\n", summary.ErrorCount, summary.FaultCount); err != nil {
+				return err
+			}
 
 			if c.PersistPatterns && len(patterns) > 0 {
 				store := output.NewPatternStore(c.PatternFile)
@@ -202,18 +220,26 @@ func (c *QueryCmd) Run(globals *Globals) error {
 					globals.Debug("Failed to save patterns: %v", err)
 				}
 
-				fmt.Fprintln(globals.Stdout, "\nError Patterns:")
+				if _, err := fmt.Fprintln(globals.Stdout, "\nError Patterns:"); err != nil {
+					return err
+				}
 				for _, p := range enhanced {
 					status := "[NEW]"
 					if !p.IsNew {
 						status = "[KNOWN]"
 					}
-					fmt.Fprintf(globals.Stdout, "  %s %s (count: %d)\n", status, p.Pattern, p.Count)
+					if _, err := fmt.Fprintf(globals.Stdout, "  %s %s (count: %d)\n", status, p.Pattern, p.Count); err != nil {
+						return err
+					}
 				}
 			} else if len(summary.TopErrors) > 0 {
-				fmt.Fprintln(globals.Stdout, "\nTop Errors:")
+				if _, err := fmt.Fprintln(globals.Stdout, "\nTop Errors:"); err != nil {
+					return err
+				}
 				for _, e := range summary.TopErrors {
-					fmt.Fprintf(globals.Stdout, "  - %s\n", e)
+					if _, err := fmt.Fprintf(globals.Stdout, "  - %s\n", e); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -222,8 +248,8 @@ func (c *QueryCmd) Run(globals *Globals) error {
 	return nil
 }
 
-func (c *QueryCmd) outputError(globals *Globals, code, message string) error {
-	return outputErrorCommon(globals, code, message)
+func (c *QueryCmd) outputError(globals *Globals, code, message string, hint ...string) error {
+	return outputErrorCommon(globals, code, message, hint...)
 }
 
 func applyQueryDefaults(cfg *config.Config, c *QueryCmd) {
@@ -237,7 +263,7 @@ func applyQueryDefaults(cfg *config.Config, c *QueryCmd) {
 			c.Simulator = cfg.Defaults.Simulator
 		}
 	}
-	if c.App == "" && cfg.Query.App != "" {
+	if c.App == "" && c.Predicate == "" && cfg.Query.App != "" {
 		c.App = cfg.Query.App
 	}
 	if c.Since == "5m" && cfg.Query.Since != "" {

@@ -41,36 +41,76 @@ func (c *ConfigShowCmd) Run(globals *Globals) error {
 	}
 
 	// Text output
-	fmt.Fprintln(globals.Stdout, "Current Configuration:")
-	fmt.Fprintln(globals.Stdout, "")
-	fmt.Fprintf(globals.Stdout, "  format:  %s\n", cfg.Format)
-	fmt.Fprintf(globals.Stdout, "  level:   %s\n", cfg.Level)
-	fmt.Fprintf(globals.Stdout, "  quiet:   %v\n", cfg.Quiet)
-	fmt.Fprintf(globals.Stdout, "  verbose: %v\n", cfg.Verbose)
-	fmt.Fprintln(globals.Stdout, "")
-	fmt.Fprintln(globals.Stdout, "Defaults:")
-	fmt.Fprintf(globals.Stdout, "  simulator:   %s\n", cfg.Defaults.Simulator)
-	fmt.Fprintf(globals.Stdout, "  app:         %s\n", cfg.Defaults.App)
-	fmt.Fprintf(globals.Stdout, "  buffer_size: %d\n", cfg.Defaults.BufferSize)
-	fmt.Fprintf(globals.Stdout, "  since:       %s\n", cfg.Defaults.Since)
-	fmt.Fprintf(globals.Stdout, "  limit:       %d\n", cfg.Defaults.Limit)
-	fmt.Fprintf(globals.Stdout, "Tail defaults: simulator=%s heartbeat=%s summary_interval=%s session_idle=%s\n",
-		cfg.Tail.Simulator, cfg.Tail.Heartbeat, cfg.Tail.SummaryInterval, cfg.Tail.SessionIdle)
-	fmt.Fprintf(globals.Stdout, "Query defaults: simulator=%s since=%s limit=%d\n",
-		cfg.Query.Simulator, cfg.Query.Since, cfg.Query.Limit)
-	fmt.Fprintf(globals.Stdout, "Watch defaults: simulator=%s cooldown=%s\n",
-		cfg.Watch.Simulator, cfg.Watch.Cooldown)
+	if _, err := fmt.Fprintln(globals.Stdout, "Current Configuration:"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  format:  %s\n", cfg.Format); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  level:   %s\n", cfg.Level); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  quiet:   %v\n", cfg.Quiet); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  verbose: %v\n", cfg.Verbose); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(globals.Stdout, "Defaults:"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  simulator:   %s\n", cfg.Defaults.Simulator); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  app:         %s\n", cfg.Defaults.App); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  buffer_size: %d\n", cfg.Defaults.BufferSize); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  since:       %s\n", cfg.Defaults.Since); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "  limit:       %d\n", cfg.Defaults.Limit); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "Tail defaults: simulator=%s heartbeat=%s summary_interval=%s session_idle=%s\n",
+		cfg.Tail.Simulator, cfg.Tail.Heartbeat, cfg.Tail.SummaryInterval, cfg.Tail.SessionIdle); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "Query defaults: simulator=%s since=%s limit=%d\n",
+		cfg.Query.Simulator, cfg.Query.Since, cfg.Query.Limit); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(globals.Stdout, "Watch defaults: simulator=%s cooldown=%s\n",
+		cfg.Watch.Simulator, cfg.Watch.Cooldown); err != nil {
+		return err
+	}
 
 	if len(cfg.Defaults.ExcludeSubsystems) > 0 {
-		fmt.Fprintf(globals.Stdout, "  exclude_subsystems: %v\n", cfg.Defaults.ExcludeSubsystems)
+		if _, err := fmt.Fprintf(globals.Stdout, "  exclude_subsystems: %v\n", cfg.Defaults.ExcludeSubsystems); err != nil {
+			return err
+		}
 	}
 	if cfg.Defaults.ExcludePattern != "" {
-		fmt.Fprintf(globals.Stdout, "  exclude_pattern: %s\n", cfg.Defaults.ExcludePattern)
+		if _, err := fmt.Fprintf(globals.Stdout, "  exclude_pattern: %s\n", cfg.Defaults.ExcludePattern); err != nil {
+			return err
+		}
 	}
 
 	if path := config.ConfigFile(); path != "" {
-		fmt.Fprintln(globals.Stdout, "")
-		fmt.Fprintf(globals.Stdout, "Loaded from: %s\n", path)
+		if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(globals.Stdout, "Loaded from: %s\n", path); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -93,14 +133,28 @@ func (c *ConfigPathCmd) Run(globals *Globals) error {
 	}
 
 	if path == "" {
-		fmt.Fprintln(globals.Stdout, "No configuration file found")
-		fmt.Fprintln(globals.Stdout, "")
-		fmt.Fprintln(globals.Stdout, "Create one at:")
-		fmt.Fprintln(globals.Stdout, "  ~/.xcw.yaml")
-		fmt.Fprintln(globals.Stdout, "  ~/.xcwrc")
-		fmt.Fprintln(globals.Stdout, "  ./xcw.yaml")
+		if _, err := fmt.Fprintln(globals.Stdout, "No configuration file found"); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(globals.Stdout); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(globals.Stdout, "Create one at:"); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(globals.Stdout, "  ~/.xcw.yaml"); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(globals.Stdout, "  ~/.xcwrc"); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(globals.Stdout, "  ./xcw.yaml"); err != nil {
+			return err
+		}
 	} else {
-		fmt.Fprintf(globals.Stdout, "Config file: %s\n", path)
+		if _, err := fmt.Fprintf(globals.Stdout, "Config file: %s\n", path); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -178,11 +232,13 @@ query:
   # since: 5m
   # limit: 1000
 
-watch:
-  # simulator: booted
-  # cooldown: 5s
-`
+	watch:
+	  # simulator: booted
+	  # cooldown: 5s
+	`
 
-	fmt.Fprint(globals.Stdout, sampleConfig)
+	if _, err := fmt.Fprint(globals.Stdout, sampleConfig); err != nil {
+		return err
+	}
 	return nil
 }

@@ -456,23 +456,6 @@ func (w *TextWriter) WriteHeartbeat(h *Heartbeat) error {
 	return err
 }
 
-func getLevelIndicator(level domain.LogLevel) string {
-	switch level {
-	case domain.LogLevelDebug:
-		return "DBG"
-	case domain.LogLevelInfo:
-		return "INF"
-	case domain.LogLevelDefault:
-		return "DEF"
-	case domain.LogLevelError:
-		return "ERR"
-	case domain.LogLevelFault:
-		return "FLT"
-	default:
-		return "???"
-	}
-}
-
 func itoa(i int) string {
 	if i == 0 {
 		return "0"

@@ -20,39 +20,39 @@ var Styles = struct {
 	Message   lipgloss.Style
 
 	// Summary styles
-	Header    lipgloss.Style
-	Label     lipgloss.Style
-	Value     lipgloss.Style
-	Success   lipgloss.Style
-	Warning   lipgloss.Style
-	Danger    lipgloss.Style
+	Header  lipgloss.Style
+	Label   lipgloss.Style
+	Value   lipgloss.Style
+	Success lipgloss.Style
+	Warning lipgloss.Style
+	Danger  lipgloss.Style
 
 	// TUI styles
-	Title       lipgloss.Style
-	StatusBar   lipgloss.Style
-	Selected    lipgloss.Style
-	Help        lipgloss.Style
+	Title     lipgloss.Style
+	StatusBar lipgloss.Style
+	Selected  lipgloss.Style
+	Help      lipgloss.Style
 }{
 	// Log levels - distinctive colors
-	Debug:   lipgloss.NewStyle().Foreground(lipgloss.Color("243")),                              // Gray
-	Info:    lipgloss.NewStyle().Foreground(lipgloss.Color("39")),                               // Cyan
-	Default: lipgloss.NewStyle().Foreground(lipgloss.Color("252")),                              // White
-	Error:   lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true),                   // Red bold
-	Fault:   lipgloss.NewStyle().Foreground(lipgloss.Color("201")).Bold(true).Underline(true),   // Magenta bold underline
+	Debug:   lipgloss.NewStyle().Foreground(lipgloss.Color("243")),                            // Gray
+	Info:    lipgloss.NewStyle().Foreground(lipgloss.Color("39")),                             // Cyan
+	Default: lipgloss.NewStyle().Foreground(lipgloss.Color("252")),                            // White
+	Error:   lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true),                 // Red bold
+	Fault:   lipgloss.NewStyle().Foreground(lipgloss.Color("201")).Bold(true).Underline(true), // Magenta bold underline
 
 	// Components
-	Timestamp: lipgloss.NewStyle().Foreground(lipgloss.Color("244")),  // Gray
-	Process:   lipgloss.NewStyle().Foreground(lipgloss.Color("33")),   // Blue
-	Subsystem: lipgloss.NewStyle().Foreground(lipgloss.Color("142")),  // Yellow-green
+	Timestamp: lipgloss.NewStyle().Foreground(lipgloss.Color("244")), // Gray
+	Process:   lipgloss.NewStyle().Foreground(lipgloss.Color("33")),  // Blue
+	Subsystem: lipgloss.NewStyle().Foreground(lipgloss.Color("142")), // Yellow-green
 	Message:   lipgloss.NewStyle(),
 
 	// Summary
 	Header:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")).BorderStyle(lipgloss.NormalBorder()).BorderBottom(true).BorderForeground(lipgloss.Color("239")),
 	Label:   lipgloss.NewStyle().Foreground(lipgloss.Color("244")),
 	Value:   lipgloss.NewStyle().Bold(true),
-	Success: lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true),   // Green
-	Warning: lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true),  // Orange
-	Danger:  lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true),  // Red
+	Success: lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true),  // Green
+	Warning: lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true), // Orange
+	Danger:  lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true), // Red
 
 	// TUI
 	Title:     lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")).Padding(0, 1),

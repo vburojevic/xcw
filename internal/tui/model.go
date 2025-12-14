@@ -64,17 +64,17 @@ func New(appName, simName string, logChan <-chan domain.LogEntry, errChan <-chan
 	ti.CharLimit = 100
 	ti.Width = 40
 
-		return Model{
-			logs:        make([]domain.LogEntry, 0, 1000),
-			filteredIdx: make([]int, 0, 1000),
-			textinput:   ti,
-			logChan:     logChan,
-			errChan:     errChan,
-			levelFilter: domain.LogLevelDebug, // Show all by default
-			follow:      true,
-			appName:     appName,
-			simName:     simName,
-		}
+	return Model{
+		logs:        make([]domain.LogEntry, 0, 1000),
+		filteredIdx: make([]int, 0, 1000),
+		textinput:   ti,
+		logChan:     logChan,
+		errChan:     errChan,
+		levelFilter: domain.LogLevelDebug, // Show all by default
+		follow:      true,
+		appName:     appName,
+		simName:     simName,
+	}
 }
 
 // Init initializes the model
@@ -125,22 +125,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textinput.SetValue("")
 					m.updateFilter()
 				}
-				case "p", " ":
-					m.paused = !m.paused
-				case "f":
-					m.follow = !m.follow
-					if m.follow {
-						m.viewport.GotoBottom()
-					}
-				case "d":
-					m.showDetails = !m.showDetails
-					m.updateFilter()
-				case "c":
-					m.logs = m.logs[:0]
-					m.filteredIdx = m.filteredIdx[:0]
-					m.stats = Stats{}
-					m.content = ""
-					m.updateViewport()
+			case "p", " ":
+				m.paused = !m.paused
+			case "f":
+				m.follow = !m.follow
+				if m.follow {
+					m.viewport.GotoBottom()
+				}
+			case "d":
+				m.showDetails = !m.showDetails
+				m.updateFilter()
+			case "c":
+				m.logs = m.logs[:0]
+				m.filteredIdx = m.filteredIdx[:0]
+				m.stats = Stats{}
+				m.content = ""
+				m.updateViewport()
 			case "1":
 				m.levelFilter = domain.LogLevelDebug
 				m.updateFilter()
@@ -161,13 +161,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "G", "end":
 				m.viewport.GotoBottom()
 			case "j", "down":
-				m.viewport.LineDown(1)
+				m.viewport.ScrollDown(1)
 			case "k", "up":
-				m.viewport.LineUp(1)
+				m.viewport.ScrollUp(1)
 			case "ctrl+d", "pgdown":
-				m.viewport.HalfViewDown()
+				m.viewport.HalfPageDown()
 			case "ctrl+u", "pgup":
-				m.viewport.HalfViewUp()
+				m.viewport.HalfPageUp()
 			}
 		}
 
@@ -189,49 +189,49 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.updateViewport()
 
-		case LogMsg:
-			if !m.paused {
-				entry := domain.LogEntry(msg)
-				m.logs = append(m.logs, entry)
-				m.stats.Total++
-				if entry.Level == domain.LogLevelError {
-					m.stats.Errors++
-				} else if entry.Level == domain.LogLevelFault {
-					m.stats.Faults++
-				}
+	case LogMsg:
+		if !m.paused {
+			entry := domain.LogEntry(msg)
+			m.logs = append(m.logs, entry)
+			m.stats.Total++
+			if entry.Level == domain.LogLevelError {
+				m.stats.Errors++
+			} else if entry.Level == domain.LogLevelFault {
+				m.stats.Faults++
+			}
 
-				// Keep only last 10000 logs
-				if len(m.logs) > 10000 {
-					m.logs = m.logs[1000:]
-					m.stats.Total = len(m.logs)
-					// Recount errors/faults
-					m.stats.Errors = 0
-					m.stats.Faults = 0
-					for _, l := range m.logs {
-						if l.Level == domain.LogLevelError {
-							m.stats.Errors++
-						} else if l.Level == domain.LogLevelFault {
-							m.stats.Faults++
-						}
+			// Keep only last 10000 logs
+			if len(m.logs) > 10000 {
+				m.logs = m.logs[1000:]
+				m.stats.Total = len(m.logs)
+				// Recount errors/faults
+				m.stats.Errors = 0
+				m.stats.Faults = 0
+				for _, l := range m.logs {
+					if l.Level == domain.LogLevelError {
+						m.stats.Errors++
+					} else if l.Level == domain.LogLevelFault {
+						m.stats.Faults++
 					}
-					// Full recompute since indices shifted
-					m.updateFilter()
-				} else {
-					// Incremental filter/update for new entry
-					query := strings.ToLower(m.searchQuery)
-					if m.entryMatches(entry, query) {
-						m.filteredIdx = append(m.filteredIdx, len(m.logs)-1)
-						line := m.formatLogLine(entry)
-						if m.content == "" {
-							m.content = line
-						} else {
-							m.content += "\n" + line
-						}
-						m.updateViewport()
+				}
+				// Full recompute since indices shifted
+				m.updateFilter()
+			} else {
+				// Incremental filter/update for new entry
+				query := strings.ToLower(m.searchQuery)
+				if m.entryMatches(entry, query) {
+					m.filteredIdx = append(m.filteredIdx, len(m.logs)-1)
+					line := m.formatLogLine(entry)
+					if m.content == "" {
+						m.content = line
+					} else {
+						m.content += "\n" + line
 					}
+					m.updateViewport()
 				}
 			}
-			cmds = append(cmds, waitForLog(m.logChan))
+		}
+		cmds = append(cmds, waitForLog(m.logChan))
 
 	case ErrMsg:
 		// Handle error (could show in status bar)
