@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.2] - 2025-12-14
+
+### Added
+- CI benchmark regression guard on pull requests (compares base vs head benchmarks for hot packages).
+- Unit tests for resume state helpers.
+
+### Changed
+- README now includes concrete recipes for `xcw watch` triggers and `xcw tail --resume`, and clarifies `xcw query` data source.
+
+### Fixed
+- `xcw tail --resume` backfill is best-effort on restart/reconnect; failures no longer abort tailing and warnings include gap context.
+
 ## [0.19.1] - 2025-12-14
 
 ### Changed
