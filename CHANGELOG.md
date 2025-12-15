@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.10] - 2025-12-15
+
+### Changed
+- `xcw help --json` now documents the full command surface (including config/pick/completion/ui/summary/update/version/log-schema/handoff) and additional output types.
+
 ## [0.19.9] - 2025-12-15
 
 ### Added

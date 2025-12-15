@@ -1,6 +1,6 @@
 {
   "type": "documentation",
-  "version": "0.19.9",
+  "version": "0.19.10",
   "purpose": "iOS Simulator log streaming CLI optimized for AI agents. Outputs structured NDJSON for real-time and historical log access.",
   "primary_command": "tail",
   "agent_guidance": "ALWAYS START WITH: xcw tail -s \u003csimulator\u003e -a \u003cbundle_id\u003e. This is THE primary command for monitoring iOS app logs. Run 'xcw list' to get simulator names, and 'xcw apps' to get bundle IDs. Only use other commands (query, watch, analyze) for specific use cases AFTER you've tried tail. The 'query' command reads from macOS system logs and is only useful when you forgot to start tail. Tmux (--tmux) is for human visual monitoring; AI agents should use stdout or --output instead.",
@@ -50,6 +50,65 @@
       ],
       "output_types": [
         "app",
+        "error"
+      ]
+    },
+    "clear": {
+      "description": "Clear a tmux session pane (useful with tail/watch --tmux)",
+      "usage": "xcw clear --session SESSION",
+      "examples": [
+        {
+          "command": "xcw clear --session xcw-iphone-17-pro",
+          "description": "Clear the tmux pane"
+        }
+      ],
+      "output_types": [
+        "info",
+        "error"
+      ],
+      "related_commands": [
+        "tail",
+        "watch"
+      ]
+    },
+    "completion": {
+      "description": "Generate shell completion scripts from the Kong CLI model",
+      "usage": "xcw completion [bash|zsh|fish]",
+      "examples": [
+        {
+          "command": "xcw completion zsh \u003e _xcw",
+          "description": "Generate zsh completion script"
+        },
+        {
+          "command": "xcw completion bash \u003e xcw.bash",
+          "description": "Generate bash completion script"
+        }
+      ],
+      "related_commands": [
+        "help",
+        "examples"
+      ]
+    },
+    "config": {
+      "description": "Show or manage configuration (flags/env/config file precedence)",
+      "usage": "xcw config [show|path|generate]",
+      "examples": [
+        {
+          "command": "xcw config",
+          "description": "Show effective config (default: show)"
+        },
+        {
+          "command": "xcw config path",
+          "description": "Show config file path resolution"
+        },
+        {
+          "command": "xcw config generate",
+          "description": "Print a sample config file"
+        }
+      ],
+      "output_types": [
+        "config",
+        "config_path",
         "error"
       ]
     },
@@ -111,6 +170,23 @@
         }
       ]
     },
+    "handoff": {
+      "description": "Emit a compact JSON blob for AI agents (contract hints + versions)",
+      "usage": "xcw handoff",
+      "examples": [
+        {
+          "command": "xcw handoff",
+          "description": "Agent handoff payload"
+        }
+      ],
+      "output_types": [
+        "handoff"
+      ],
+      "related_commands": [
+        "help",
+        "schema"
+      ]
+    },
     "launch": {
       "description": "Launch an app and capture stdout/stderr (print statements). Use this when you need to see print() output that isn't captured by unified logging.",
       "usage": "xcw launch -s SIMULATOR -a APP [flags]",
@@ -154,6 +230,45 @@
       "output_types": [
         "simulator",
         "error"
+      ]
+    },
+    "log-schema": {
+      "description": "Output a minimal log schema document for agents",
+      "usage": "xcw log-schema",
+      "examples": [
+        {
+          "command": "xcw log-schema",
+          "description": "Minimal log schema fields + example"
+        }
+      ],
+      "output_types": [
+        "log_schema"
+      ],
+      "related_commands": [
+        "schema",
+        "help"
+      ]
+    },
+    "pick": {
+      "description": "Interactively pick a simulator or app (prints an ID suitable for scripting)",
+      "usage": "xcw pick [simulator|app] [flags]",
+      "examples": [
+        {
+          "command": "xcw pick simulator",
+          "description": "Interactively select a simulator (prints UDID)"
+        },
+        {
+          "command": "xcw pick app",
+          "description": "Interactively select an app on the booted simulator (prints bundle id)"
+        }
+      ],
+      "output_types": [
+        "pick",
+        "error"
+      ],
+      "related_commands": [
+        "list",
+        "apps"
       ]
     },
     "query": {
@@ -250,6 +365,30 @@
         "error"
       ]
     },
+    "summary": {
+      "description": "Summarize recent logs for an app (runs a bounded query and outputs analysis)",
+      "usage": "xcw summary -a APP [--window DURATION] [flags]",
+      "examples": [
+        {
+          "command": "xcw summary -a com.example.myapp --window 5m",
+          "description": "Analyze the last 5 minutes of logs"
+        },
+        {
+          "command": "xcw summary -s \"iPhone 17 Pro\" -a com.example.myapp --window 30m -p \"error|fatal\"",
+          "description": "Analyze last 30 minutes with pattern filter"
+        }
+      ],
+      "output_types": [
+        "analysis",
+        "error"
+      ],
+      "related_commands": [
+        "query",
+        "tail",
+        "analyze",
+        "discover"
+      ]
+    },
     "tail": {
       "description": "Stream real-time logs from iOS Simulator (use -a unless --predicate/--all)",
       "usage": "xcw tail -s SIMULATOR [-a APP] [flags]",
@@ -330,6 +469,61 @@
         "watch",
         "analyze",
         "discover"
+      ]
+    },
+    "ui": {
+      "description": "Interactive TUI log viewer (for humans; not suitable for agents)",
+      "usage": "xcw ui -s SIMULATOR [-a APP] [flags]",
+      "examples": [
+        {
+          "command": "xcw ui -s \"iPhone 17 Pro\" -a com.example.myapp",
+          "description": "Open TUI for an app"
+        },
+        {
+          "command": "xcw ui -b -a com.example.myapp",
+          "description": "Open TUI on booted simulator"
+        }
+      ],
+      "output_types": [
+        "error"
+      ],
+      "related_commands": [
+        "tail",
+        "watch"
+      ]
+    },
+    "update": {
+      "description": "Show how to upgrade xcw (Homebrew / go install)",
+      "usage": "xcw update",
+      "examples": [
+        {
+          "command": "xcw update",
+          "description": "Upgrade instructions (NDJSON by default)"
+        },
+        {
+          "command": "xcw -f text update",
+          "description": "Human-readable upgrade instructions"
+        }
+      ],
+      "output_types": [
+        "update"
+      ]
+    },
+    "version": {
+      "description": "Show version information",
+      "usage": "xcw version",
+      "examples": [
+        {
+          "command": "xcw version",
+          "description": "Print version (NDJSON by default)"
+        },
+        {
+          "command": "xcw -f text version",
+          "description": "Human-readable version"
+        }
+      ],
+      "output_types": [
+        "version"
       ]
     },
     "watch": {
@@ -413,6 +607,28 @@
         "type": "clear_buffer"
       },
       "when": "Immediately after session_start/session_end/idle rollover in NDJSON mode"
+    },
+    "config": {
+      "description": "Effective configuration and provenance (sources)",
+      "example": {
+        "config_file": "~/.config/xcw/config.yaml",
+        "format": "ndjson",
+        "level": "debug",
+        "quiet": false,
+        "schemaVersion": 1,
+        "type": "config",
+        "verbose": false
+      },
+      "when": "From xcw config show (NDJSON mode)"
+    },
+    "config_path": {
+      "description": "Resolved configuration file path (if any)",
+      "example": {
+        "path": "~/.config/xcw/config.yaml",
+        "schemaVersion": 1,
+        "type": "config_path"
+      },
+      "when": "From xcw config path (NDJSON mode)"
     },
     "console": {
       "description": "Console output (stdout/stderr) from xcw launch. Captures print() statements not available via unified logging.",
@@ -544,6 +760,20 @@
       },
       "when": "After xcw backfills a gap when --resume is enabled (NDJSON only)"
     },
+    "handoff": {
+      "description": "Compact handoff blob for agents (hints + versions)",
+      "example": {
+        "contract_version": 1,
+        "hints": [
+          "ALWAYS START WITH: xcw tail ..."
+        ],
+        "schemaVersion": 1,
+        "timestamp": "2025-12-15T00:00:00Z",
+        "type": "handoff",
+        "version": "0.19.9"
+      },
+      "when": "From xcw handoff"
+    },
     "heartbeat": {
       "description": "Keepalive message for stream health",
       "example": {
@@ -558,6 +788,17 @@
         "uptime_seconds": 300
       },
       "when": "Periodically when --heartbeat is used"
+    },
+    "info": {
+      "description": "Informational message from xcw (non-log event)",
+      "example": {
+        "message": "Watching logs from iPhone 17 Pro",
+        "schemaVersion": 1,
+        "simulator": "iPhone 17 Pro",
+        "type": "info",
+        "udid": "ABC123-DEF456-..."
+      },
+      "when": "Startup banners and status messages (unless --quiet)"
     },
     "log": {
       "description": "Individual log entry from iOS Simulator. Includes session number for tracking app relaunches.",
@@ -576,6 +817,18 @@
       },
       "when": "Each log entry during tail or query"
     },
+    "log_schema": {
+      "description": "Minimal schema doc for log events (agents)",
+      "example": {
+        "fields": {
+          "level": "Debug|Info|Default|Error|Fault",
+          "timestamp": "ISO8601 UTC"
+        },
+        "schemaVersion": 1,
+        "type": "log_schema"
+      },
+      "when": "From xcw log-schema"
+    },
     "metadata": {
       "description": "Tool metadata emitted at start of tail for agents.",
       "example": {
@@ -586,6 +839,17 @@
         "version": "0.10.0"
       },
       "when": "At tail start"
+    },
+    "pick": {
+      "description": "Pick result from xcw pick (simulator/app)",
+      "example": {
+        "bundle_id": "com.example.myapp",
+        "name": "MyApp",
+        "picked": "app",
+        "schemaVersion": 1,
+        "type": "pick"
+      },
+      "when": "From xcw pick (NDJSON mode)"
     },
     "ready": {
       "description": "Signals that log capture is active and ready. Use with --wait-for-launch to start capturing before the app launches.",
@@ -761,6 +1025,37 @@
         "type": "trigger_result"
       },
       "when": "After a watch trigger command exits"
+    },
+    "update": {
+      "description": "xcw upgrade instructions",
+      "example": {
+        "commit": "none",
+        "current_version": "0.19.9",
+        "go_install": "go install github.com/vburojevic/xcw/cmd/xcw@latest",
+        "homebrew": "brew update \u0026\u0026 brew upgrade xcw",
+        "releases_url": "https://github.com/vburojevic/xcw/releases",
+        "schemaVersion": 1,
+        "type": "update"
+      },
+      "when": "From xcw update (NDJSON mode)"
+    },
+    "version": {
+      "description": "xcw version information",
+      "example": {
+        "commit": "none",
+        "type": "version",
+        "version": "0.19.9"
+      },
+      "when": "From xcw version"
+    },
+    "warning": {
+      "description": "Warning from xcw (non-fatal)",
+      "example": {
+        "message": "reconnect_notice: reconnecting log stream",
+        "schemaVersion": 1,
+        "type": "warning"
+      },
+      "when": "Non-fatal issues (eg. reconnects, trigger skips, diagnostic warnings)"
     }
   },
   "error_codes": {

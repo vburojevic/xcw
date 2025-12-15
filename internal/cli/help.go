@@ -117,6 +117,24 @@ func buildDocumentation() *HelpOutput {
 		},
 		Contract: defaultHints(),
 		Commands: map[string]CommandDoc{
+			"version": {
+				Description: "Show version information",
+				Usage:       "xcw version",
+				Examples: []ExampleDoc{
+					{Command: `xcw version`, Description: "Print version (NDJSON by default)"},
+					{Command: `xcw -f text version`, Description: "Human-readable version"},
+				},
+				OutputTypes: []string{"version"},
+			},
+			"update": {
+				Description: "Show how to upgrade xcw (Homebrew / go install)",
+				Usage:       "xcw update",
+				Examples: []ExampleDoc{
+					{Command: `xcw update`, Description: "Upgrade instructions (NDJSON by default)"},
+					{Command: `xcw -f text update`, Description: "Human-readable upgrade instructions"},
+				},
+				OutputTypes: []string{"update"},
+			},
 			"tail": {
 				Description: "Stream real-time logs from iOS Simulator (use -a unless --predicate/--all)",
 				Usage:       "xcw tail -s SIMULATOR [-a APP] [flags]",
@@ -153,6 +171,16 @@ func buildDocumentation() *HelpOutput {
 				OutputTypes:     []string{"log", "analysis", "error"},
 				RelatedCommands: []string{"tail", "analyze"},
 			},
+			"summary": {
+				Description: "Summarize recent logs for an app (runs a bounded query and outputs analysis)",
+				Usage:       "xcw summary -a APP [--window DURATION] [flags]",
+				Examples: []ExampleDoc{
+					{Command: `xcw summary -a com.example.myapp --window 5m`, Description: "Analyze the last 5 minutes of logs"},
+					{Command: `xcw summary -s "iPhone 17 Pro" -a com.example.myapp --window 30m -p "error|fatal"`, Description: "Analyze last 30 minutes with pattern filter"},
+				},
+				OutputTypes:     []string{"analysis", "error"},
+				RelatedCommands: []string{"query", "tail", "analyze", "discover"},
+			},
 			"watch": {
 				Description: "Stream logs like tail, but run trigger commands on errors/faults or message patterns (supports agent-safe cutoffs via --max-duration/--max-logs)",
 				Usage:       "xcw watch -s SIMULATOR [-a APP] [flags]",
@@ -183,6 +211,16 @@ func buildDocumentation() *HelpOutput {
 				},
 				OutputTypes: []string{"app", "error"},
 			},
+			"pick": {
+				Description: "Interactively pick a simulator or app (prints an ID suitable for scripting)",
+				Usage:       "xcw pick [simulator|app] [flags]",
+				Examples: []ExampleDoc{
+					{Command: `xcw pick simulator`, Description: "Interactively select a simulator (prints UDID)"},
+					{Command: `xcw pick app`, Description: "Interactively select an app on the booted simulator (prints bundle id)"},
+				},
+				OutputTypes:     []string{"pick", "error"},
+				RelatedCommands: []string{"list", "apps"},
+			},
 			"launch": {
 				Description: "Launch an app and capture stdout/stderr (print statements). Use this when you need to see print() output that isn't captured by unified logging.",
 				Usage:       "xcw launch -s SIMULATOR -a APP [flags]",
@@ -194,6 +232,35 @@ func buildDocumentation() *HelpOutput {
 				OutputTypes:     []string{"console", "info", "error"},
 				RelatedCommands: []string{"tail", "apps"},
 			},
+			"ui": {
+				Description: "Interactive TUI log viewer (for humans; not suitable for agents)",
+				Usage:       "xcw ui -s SIMULATOR [-a APP] [flags]",
+				Examples: []ExampleDoc{
+					{Command: `xcw ui -s "iPhone 17 Pro" -a com.example.myapp`, Description: "Open TUI for an app"},
+					{Command: `xcw ui -b -a com.example.myapp`, Description: "Open TUI on booted simulator"},
+				},
+				OutputTypes:     []string{"error"},
+				RelatedCommands: []string{"tail", "watch"},
+			},
+			"clear": {
+				Description: "Clear a tmux session pane (useful with tail/watch --tmux)",
+				Usage:       "xcw clear --session SESSION",
+				Examples: []ExampleDoc{
+					{Command: `xcw clear --session xcw-iphone-17-pro`, Description: "Clear the tmux pane"},
+				},
+				OutputTypes:     []string{"info", "error"},
+				RelatedCommands: []string{"tail", "watch"},
+			},
+			"config": {
+				Description: "Show or manage configuration (flags/env/config file precedence)",
+				Usage:       "xcw config [show|path|generate]",
+				Examples: []ExampleDoc{
+					{Command: `xcw config`, Description: "Show effective config (default: show)"},
+					{Command: `xcw config path`, Description: "Show config file path resolution"},
+					{Command: `xcw config generate`, Description: "Print a sample config file"},
+				},
+				OutputTypes: []string{"config", "config_path", "error"},
+			},
 			"doctor": {
 				Description: "Check system requirements and configuration",
 				Usage:       "xcw doctor",
@@ -201,6 +268,15 @@ func buildDocumentation() *HelpOutput {
 					{Command: `xcw doctor`, Description: "Run all checks"},
 				},
 				OutputTypes: []string{"doctor", "error"},
+			},
+			"completion": {
+				Description: "Generate shell completion scripts from the Kong CLI model",
+				Usage:       "xcw completion [bash|zsh|fish]",
+				Examples: []ExampleDoc{
+					{Command: `xcw completion zsh > _xcw`, Description: "Generate zsh completion script"},
+					{Command: `xcw completion bash > xcw.bash`, Description: "Generate bash completion script"},
+				},
+				RelatedCommands: []string{"help", "examples"},
 			},
 			"analyze": {
 				Description: "Analyze a recorded NDJSON log file",
@@ -242,6 +318,24 @@ func buildDocumentation() *HelpOutput {
 				OutputTypes:     []string{"discovery", "error"},
 				RelatedCommands: []string{"tail", "query"},
 			},
+			"log-schema": {
+				Description: "Output a minimal log schema document for agents",
+				Usage:       "xcw log-schema",
+				Examples: []ExampleDoc{
+					{Command: `xcw log-schema`, Description: "Minimal log schema fields + example"},
+				},
+				OutputTypes:     []string{"log_schema"},
+				RelatedCommands: []string{"schema", "help"},
+			},
+			"handoff": {
+				Description: "Emit a compact JSON blob for AI agents (contract hints + versions)",
+				Usage:       "xcw handoff",
+				Examples: []ExampleDoc{
+					{Command: `xcw handoff`, Description: "Agent handoff payload"},
+				},
+				OutputTypes:     []string{"handoff"},
+				RelatedCommands: []string{"help", "schema"},
+			},
 			"schema": {
 				Description: "Output JSON Schema for xcw output types",
 				Usage:       "xcw schema [flags]",
@@ -261,6 +355,26 @@ func buildDocumentation() *HelpOutput {
 			},
 		},
 		OutputTypes: map[string]OutputTypeDoc{
+			"info": {
+				Description: "Informational message from xcw (non-log event)",
+				Example: map[string]interface{}{
+					"type":          "info",
+					"schemaVersion": 1,
+					"message":       "Watching logs from iPhone 17 Pro",
+					"simulator":     "iPhone 17 Pro",
+					"udid":          "ABC123-DEF456-...",
+				},
+				When: "Startup banners and status messages (unless --quiet)",
+			},
+			"warning": {
+				Description: "Warning from xcw (non-fatal)",
+				Example: map[string]interface{}{
+					"type":          "warning",
+					"schemaVersion": 1,
+					"message":       "reconnect_notice: reconnecting log stream",
+				},
+				When: "Non-fatal issues (eg. reconnects, trigger skips, diagnostic warnings)",
+			},
 			"log": {
 				Description: "Individual log entry from iOS Simulator. Includes session number for tracking app relaunches.",
 				Example: map[string]interface{}{
@@ -604,6 +718,82 @@ func buildDocumentation() *HelpOutput {
 					"timestamp":     "2024-12-15T10:30:45Z",
 				},
 				When: "From xcw sessions list/show commands",
+			},
+			"version": {
+				Description: "xcw version information",
+				Example: map[string]interface{}{
+					"type":    "version",
+					"version": "0.19.9",
+					"commit":  "none",
+				},
+				When: "From xcw version",
+			},
+			"update": {
+				Description: "xcw upgrade instructions",
+				Example: map[string]interface{}{
+					"type":            "update",
+					"schemaVersion":   1,
+					"current_version": "0.19.9",
+					"commit":          "none",
+					"homebrew":        "brew update && brew upgrade xcw",
+					"go_install":      "go install github.com/vburojevic/xcw/cmd/xcw@latest",
+					"releases_url":    "https://github.com/vburojevic/xcw/releases",
+				},
+				When: "From xcw update (NDJSON mode)",
+			},
+			"config": {
+				Description: "Effective configuration and provenance (sources)",
+				Example: map[string]interface{}{
+					"type":          "config",
+					"schemaVersion": 1,
+					"config_file":   "~/.config/xcw/config.yaml",
+					"format":        "ndjson",
+					"level":         "debug",
+					"quiet":         false,
+					"verbose":       false,
+				},
+				When: "From xcw config show (NDJSON mode)",
+			},
+			"config_path": {
+				Description: "Resolved configuration file path (if any)",
+				Example: map[string]interface{}{
+					"type":          "config_path",
+					"schemaVersion": 1,
+					"path":          "~/.config/xcw/config.yaml",
+				},
+				When: "From xcw config path (NDJSON mode)",
+			},
+			"pick": {
+				Description: "Pick result from xcw pick (simulator/app)",
+				Example: map[string]interface{}{
+					"type":          "pick",
+					"schemaVersion": 1,
+					"picked":        "app",
+					"name":          "MyApp",
+					"bundle_id":     "com.example.myapp",
+				},
+				When: "From xcw pick (NDJSON mode)",
+			},
+			"log_schema": {
+				Description: "Minimal schema doc for log events (agents)",
+				Example: map[string]interface{}{
+					"type":          "log_schema",
+					"schemaVersion": 1,
+					"fields":        map[string]string{"timestamp": "ISO8601 UTC", "level": "Debug|Info|Default|Error|Fault"},
+				},
+				When: "From xcw log-schema",
+			},
+			"handoff": {
+				Description: "Compact handoff blob for agents (hints + versions)",
+				Example: map[string]interface{}{
+					"type":             "handoff",
+					"version":          "0.19.9",
+					"schemaVersion":    1,
+					"contract_version": 1,
+					"timestamp":        "2025-12-15T00:00:00Z",
+					"hints":            []string{"ALWAYS START WITH: xcw tail ..."},
+				},
+				When: "From xcw handoff",
 			},
 			"doctor": {
 				Description: "System diagnostic report",
