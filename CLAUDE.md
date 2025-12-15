@@ -31,18 +31,18 @@ make install                  # Install to /usr/local/bin
 This repo uses Beads for task tracking. Always manage work via the Beads CLI (`bd`) rather than ad-hoc TODO lists in chat.
 
 ```bash
-# Prefer deterministic direct mode (and use it if daemon paths mismatch)
-bd --no-daemon list --long
+# This repo config defaults to deterministic direct mode (no-daemon).
+bd list --long
 
 # Create a task/feature/bug
-bd --no-daemon create --type task --priority P2 --title "Short title" --description "What/why + acceptance criteria"
+bd create --type task --priority P2 --title "Short title" --description "What/why + acceptance criteria"
 
 # Start work / add progress notes
-bd --no-daemon update <issue-id> --status in_progress
-bd --no-daemon comment <issue-id> "Progress update + verification commands (e.g. go test ./...)"
+bd update <issue-id> --status in_progress
+bd comment <issue-id> "Progress update + verification commands (e.g. go test ./...)"
 
 # Close when done
-bd --no-daemon close <issue-id>
+bd close <issue-id>
 ```
 
 Do not hand-edit `.beads/*` files; use `bd` to avoid database/JSONL drift.

@@ -32,9 +32,9 @@ Thanks for your interest in improving **XcodeConsoleWatcher (xcw)**.
 
 This repo uses **Beads** for issue tracking.
 
-- List issues: `bd --no-daemon list`
-- Create issue: `bd --no-daemon create "Title"`
-- Update status: `bd --no-daemon update <id> --status in_progress|closed`
+- List issues: `bd list`
+- Create issue: `bd create "Title"`
+- Update status: `bd update <id> --status in_progress|closed`
 
 ## Submitting changes
 
@@ -53,4 +53,3 @@ Open a Beads issue (preferred) or a GitHub issue. Include:
 - macOS + Xcode version
 - Simulator/device name & runtime
 - Repro steps and expected vs actual behavior
-

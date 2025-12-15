@@ -14,20 +14,20 @@ Beads is issue tracking that lives in your repo, making it perfect for AI coding
 
 ```bash
 # Create new issues
-bd --no-daemon create --type task --priority P2 --title "Add user authentication" --description "What/why + acceptance criteria"
+bd create --type task --priority P2 --title "Add user authentication" --description "What/why + acceptance criteria"
 
 # View all issues
-bd --no-daemon list
+bd list
 
 # View issue details
-bd --no-daemon show <issue-id>
+bd show <issue-id>
 
 # Update issue status
-bd --no-daemon update <issue-id> --status in_progress
-bd --no-daemon close <issue-id>
+bd update <issue-id> --status in_progress
+bd close <issue-id>
 
 # Sync with git remote
-bd --no-daemon sync
+bd sync
 ```
 
 ### Working with Issues
@@ -39,7 +39,7 @@ Issues in Beads are:
 - **Always in sync**: Auto-syncs with your commits
 
 Notes:
-- Prefer `bd --no-daemon` for deterministic runs (and to avoid daemon/worktree edge cases).
+- Repo config defaults to deterministic direct mode (`no-daemon: true` in `.beads/config.yaml`).
 - Valid statuses in this repo: `open`, `in_progress`, `blocked`, `closed`.
 - Do not hand-edit `.beads/*` files; use the CLI so hashes and metadata stay consistent.
 
