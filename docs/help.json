@@ -406,6 +406,14 @@
           "description": "Stream to file"
         },
         {
+          "command": "xcw tail -s \"iPhone 17 Pro\" -a com.example.myapp --max-duration 5m",
+          "description": "Stream for 5 minutes and stop (emits cutoff_reached)"
+        },
+        {
+          "command": "xcw tail -s \"iPhone 17 Pro\" -a com.example.myapp --max-logs 1000",
+          "description": "Stop after 1000 logs (emits cutoff_reached)"
+        },
+        {
           "command": "xcw tail -s \"iPhone 17 Pro\" -a com.example.myapp -l error",
           "description": "Only error/fault level"
         },
@@ -461,6 +469,7 @@
         "ready",
         "summary",
         "heartbeat",
+        "cutoff_reached",
         "tmux",
         "error"
       ],

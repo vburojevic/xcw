@@ -66,6 +66,16 @@ var commandExamples = map[string]CommandExamples{
 				When:        "Need to replay or share logs across analysis passes",
 			},
 			{
+				Command:     `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --max-duration 5m`,
+				Description: "Stream for 5 minutes and stop (emits cutoff_reached)",
+				When:        "Bounded monitoring windows for agents or scripts",
+			},
+			{
+				Command:     `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --max-logs 1000`,
+				Description: "Stop after 1000 logs (emits cutoff_reached)",
+				When:        "Keep output volume bounded for downstream consumers",
+			},
+			{
 				Command:     `xcw tail -s "iPhone 17 Pro" -a com.example.myapp -l error`,
 				Description: "Only show error and fault level logs",
 				When:        "Reduce noise, focus on problems",

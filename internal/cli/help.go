@@ -142,6 +142,8 @@ func buildDocumentation() *HelpOutput {
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp`, Description: "Basic streaming to stdout"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --tmux`, Description: "Background with tmux (returns session name)"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --output file.ndjson`, Description: "Stream to file"},
+					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --max-duration 5m`, Description: "Stream for 5 minutes and stop (emits cutoff_reached)"},
+					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --max-logs 1000`, Description: "Stop after 1000 logs (emits cutoff_reached)"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp -l error`, Description: "Only error/fault level"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --filter "error|warn"`, Description: "Filter by regex (alias for --pattern)"},
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --dry-run-json`, Description: "Print resolved stream options as JSON and exit"},
@@ -155,7 +157,7 @@ func buildDocumentation() *HelpOutput {
 					{Command: `xcw tail -s "iPhone 17 Pro" -a com.example.myapp --session-idle 60s`, Description: "Force a new session boundary after 60s of inactivity"},
 					{Command: `xcw tail -s "iPhone 17 Pro" --predicate 'process == \"MyApp\"'`, Description: "Stream without -a using a raw predicate (advanced)"},
 				},
-				OutputTypes:     []string{"log", "session_start", "session_end", "ready", "summary", "heartbeat", "tmux", "error"},
+				OutputTypes:     []string{"log", "session_start", "session_end", "ready", "summary", "heartbeat", "cutoff_reached", "tmux", "error"},
 				RelatedCommands: []string{"query", "watch", "analyze", "discover"},
 			},
 			"query": {

@@ -135,6 +135,12 @@ xcw tail -s "iPhone 17 Pro" -a com.example.myapp
 # force a new session if no logs arrive for 60s
 xcw tail -s "iPhone 17 Pro" -a com.example.myapp --session-idle 60s
 
+# stop after 5 minutes (emits cutoff_reached in NDJSON)
+xcw tail -s "iPhone 17 Pro" -a com.example.myapp --max-duration 5m
+
+# stop after 1000 logs (emits cutoff_reached in NDJSON)
+xcw tail -s "iPhone 17 Pro" -a com.example.myapp --max-logs 1000
+
 # machine-friendly preset for agents
 xcw --machine-friendly tail -s "iPhone 17 Pro" -a com.example.myapp
 
