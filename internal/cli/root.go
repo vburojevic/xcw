@@ -169,6 +169,6 @@ func (v *VersionCmd) Run(globals *Globals) error {
 
 // Version information (set at build time)
 var (
-	Version = "0.19.13"
+	Version = "0.19.14"
 	Commit  = "none"
 )
